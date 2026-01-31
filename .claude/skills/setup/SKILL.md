@@ -13,7 +13,47 @@ Run all commands automatically. Only pause when user action is required (scannin
 npm install
 ```
 
-## 2. WhatsApp Authentication
+## 2. Install Apple Container
+
+Check if Apple Container is installed:
+
+```bash
+which container && container --version || echo "Not installed"
+```
+
+If not installed, tell the user:
+> Apple Container is required for running agents in isolated environments.
+>
+> 1. Download the latest `.pkg` from https://github.com/apple/container/releases
+> 2. Double-click to install
+> 3. Run `container system start` to start the service
+>
+> Let me know when you've completed these steps.
+
+Wait for user confirmation, then verify:
+
+```bash
+container system start 2>/dev/null || true
+container --version
+```
+
+## 3. Build Container Image
+
+Build the NanoClaw agent container:
+
+```bash
+./container/build.sh
+```
+
+This creates the `nanoclaw-agent:latest` image with Node.js, Chromium, and agent-browser.
+
+Verify the image was created:
+
+```bash
+container images | grep nanoclaw-agent || echo "Image not found"
+```
+
+## 4. WhatsApp Authentication
 
 **USER ACTION REQUIRED**
 
@@ -33,7 +73,7 @@ Wait for the script to output "Successfully authenticated" then continue.
 
 If it says "Already authenticated", skip to the next step.
 
-## 3. Configure Assistant Name
+## 5. Configure Assistant Name
 
 Ask the user:
 > What trigger word do you want to use? (default: `Andy`)
@@ -42,7 +82,7 @@ Ask the user:
 
 Store their choice - you'll use it when creating the registered_groups.json and when telling them how to test.
 
-## 4. Register Main Channel
+## 6. Register Main Channel
 
 Ask the user:
 > Do you want to use your **personal chat** (message yourself) or a **WhatsApp group** as your main control channel?
@@ -69,7 +109,7 @@ sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid
 sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@g.us' ORDER BY timestamp DESC LIMIT 5"
 ```
 
-Create/update `data/registered_groups.json` using the JID from above and the assistant name from step 3:
+Create/update `data/registered_groups.json` using the JID from above and the assistant name from step 5:
 ```json
 {
   "JID_HERE": {
@@ -86,7 +126,7 @@ Ensure the groups folder exists:
 mkdir -p groups/main/logs
 ```
 
-## 5. Gmail Authentication (Optional)
+## 7. Gmail Authentication (Optional)
 
 Ask the user:
 > Do you want to enable Gmail integration for reading/sending emails?
@@ -113,7 +153,7 @@ npx -y @gongrzhe/server-gmail-autoauth-mcp
 
 This will open a browser for OAuth consent. After authorization, credentials are cached.
 
-## 6. Configure launchd Service
+## 8. Configure launchd Service
 
 Get the actual paths:
 
@@ -172,7 +212,7 @@ Verify it's running:
 launchctl list | grep nanoclaw
 ```
 
-## 7. Test
+## 9. Test
 
 Tell the user (using the assistant name they configured):
 > Send `@ASSISTANT_NAME hello` in your registered chat.
