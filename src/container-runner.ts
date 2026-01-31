@@ -44,22 +44,39 @@ interface VolumeMount {
 function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount[] {
   const mounts: VolumeMount[] = [];
   const homeDir = process.env.HOME || '/Users/gavriel';
+  const projectRoot = process.cwd();
 
-  // Group's working directory (read-write)
-  mounts.push({
-    hostPath: path.join(GROUPS_DIR, group.folder),
-    containerPath: '/workspace/group',
-    readonly: false
-  });
-
-  // Global CLAUDE.md (read-only for non-main, read-write for main)
-  const globalClaudeMd = path.join(GROUPS_DIR, 'CLAUDE.md');
-  if (fs.existsSync(globalClaudeMd)) {
+  if (isMain) {
+    // Main gets the entire project root mounted
     mounts.push({
-      hostPath: globalClaudeMd,
-      containerPath: '/workspace/global/CLAUDE.md',
-      readonly: !isMain
+      hostPath: projectRoot,
+      containerPath: '/workspace/project',
+      readonly: false
     });
+
+    // Main also gets its group folder as the working directory
+    mounts.push({
+      hostPath: path.join(GROUPS_DIR, group.folder),
+      containerPath: '/workspace/group',
+      readonly: false
+    });
+  } else {
+    // Other groups only get their own folder
+    mounts.push({
+      hostPath: path.join(GROUPS_DIR, group.folder),
+      containerPath: '/workspace/group',
+      readonly: false
+    });
+
+    // Global CLAUDE.md (read-only for non-main)
+    const globalClaudeMd = path.join(GROUPS_DIR, 'CLAUDE.md');
+    if (fs.existsSync(globalClaudeMd)) {
+      mounts.push({
+        hostPath: globalClaudeMd,
+        containerPath: '/workspace/global/CLAUDE.md',
+        readonly: true
+      });
+    }
   }
 
   // Claude sessions directory (for session persistence)
