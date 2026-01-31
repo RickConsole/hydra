@@ -356,9 +356,16 @@ async function connectWhatsApp(): Promise<void> {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log('\nScan this QR code with WhatsApp:\n');
-      qrcode.generate(qr, { small: true });
-      console.log('\nWaiting for scan...\n');
+      // Only show QR if running interactively (not as a background daemon)
+      if (process.stdout.isTTY) {
+        console.log('\nScan this QR code with WhatsApp:\n');
+        qrcode.generate(qr, { small: true });
+        console.log('\nWaiting for scan...\n');
+      } else {
+        logger.error('WhatsApp authentication required but running non-interactively.');
+        logger.error('Run "npm run dev" manually to scan the QR code, then restart the service.');
+        process.exit(1);
+      }
     }
 
     if (connection === 'close') {
