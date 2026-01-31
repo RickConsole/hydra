@@ -90,21 +90,15 @@ async function processMessage(msg: NewMessage): Promise<void> {
   if (!prompt) return;
 
   logger.info({ group: group.name, prompt: prompt.slice(0, 50) }, 'Processing message');
-  const response = await runAgent(group, prompt, msg.chat_jid);
-  if (response) await sendMessage(msg.chat_jid, response);
+  const response = await runAgent(group, prompt);
+  if (response) {
+    await sendMessage(msg.chat_jid, `${ASSISTANT_NAME}: ${response}`);
+  }
 }
 
-async function runAgent(group: RegisteredGroup, prompt: string, chatJid: string): Promise<string | null> {
-  const isMain = group.folder === 'main';
+async function runAgent(group: RegisteredGroup, prompt: string): Promise<string | null> {
   const groupDir = path.join(GROUPS_DIR, group.folder);
-  fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
-
-  const context = `[WhatsApp message from group: ${group.name}]
-[Reply to chat_jid: ${chatJid}]
-[Can write to global memory (../CLAUDE.md): ${isMain}]
-[Prefix your responses with "${ASSISTANT_NAME}:"]
-
-User message: ${prompt}`;
+  fs.mkdirSync(groupDir, { recursive: true });
 
   const sessionId = sessions[group.folder];
   let newSessionId: string | undefined;
@@ -112,7 +106,7 @@ User message: ${prompt}`;
 
   try {
     for await (const message of query({
-      prompt: context,
+      prompt,
       options: {
         cwd: groupDir,
         resume: sessionId,
@@ -134,7 +128,7 @@ User message: ${prompt}`;
     }
   } catch (err) {
     logger.error({ group: group.name, err }, 'Agent error');
-    return `${ASSISTANT_NAME}: Sorry, I encountered an error. Please try again.`;
+    return null;
   }
 
   if (newSessionId) {
@@ -142,7 +136,6 @@ User message: ${prompt}`;
     saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
   }
 
-  if (result) logger.info({ group: group.name, result: result.slice(0, 100) }, 'Agent response');
   return result;
 }
 
