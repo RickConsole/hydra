@@ -72,3 +72,13 @@ export function getNewMessages(jids: string[], lastTimestamp: string): { message
 
   return { messages: rows, newTimestamp };
 }
+
+export function getMessagesSince(chatJid: string, sinceTimestamp: string): NewMessage[] {
+  const sql = `
+    SELECT id, chat_jid, sender, content, timestamp
+    FROM messages
+    WHERE chat_jid = ? AND timestamp > ?
+    ORDER BY timestamp
+  `;
+  return db.prepare(sql).all(chatJid, sinceTimestamp) as NewMessage[];
+}
