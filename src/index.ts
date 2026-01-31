@@ -94,8 +94,10 @@ async function processMessage(msg: NewMessage): Promise<void> {
 
   // Build prompt with conversation history
   const lines = missedMessages.map(m => {
-    const time = new Date(m.timestamp).toLocaleTimeString();
-    return `[${time}] ${m.sender_name}: ${m.content}`;
+    const d = new Date(m.timestamp);
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return `[${date} ${time}] ${m.sender_name}: ${m.content}`;
   });
   const prompt = lines.join('\n');
 
