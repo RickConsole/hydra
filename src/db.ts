@@ -32,10 +32,6 @@ export function initDatabase(): void {
   `);
 }
 
-export function closeDatabase(): void {
-  db.close();
-}
-
 export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFromMe: boolean): void {
   if (!msg.key) return;
 

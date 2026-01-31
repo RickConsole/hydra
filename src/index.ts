@@ -20,7 +20,7 @@ import {
   CLEAR_COMMAND
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
-import { initDatabase, closeDatabase, storeMessage, getNewMessages } from './db.js';
+import { initDatabase, storeMessage, getNewMessages } from './db.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -232,14 +232,6 @@ async function main(): Promise<void> {
   logger.info('Database initialized');
   loadState();
   await connectWhatsApp();
-
-  const shutdown = () => {
-    logger.info('Shutting down...');
-    closeDatabase();
-    process.exit(0);
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
 }
 
 main().catch(err => {
