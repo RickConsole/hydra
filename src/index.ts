@@ -17,8 +17,8 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pino from 'pino';
-import qrcode from 'qrcode-terminal';
 import Database from 'better-sqlite3';
+import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -356,16 +356,16 @@ async function connectWhatsApp(): Promise<void> {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      // Only show QR if running interactively (not as a background daemon)
-      if (process.stdout.isTTY) {
-        console.log('\nScan this QR code with WhatsApp:\n');
-        qrcode.generate(qr, { small: true });
-        console.log('\nWaiting for scan...\n');
-      } else {
-        logger.error('WhatsApp authentication required but running non-interactively.');
-        logger.error('Run "npm run dev" manually to scan the QR code, then restart the service.');
-        process.exit(1);
-      }
+      // Auth needed - notify user and exit
+      // This shouldn't happen during normal operation; auth is done during setup
+      const msg = 'WhatsApp authentication required. Run /setup in Claude Code.';
+      logger.error(msg);
+
+      // Send macOS notification so user sees it
+      exec(`osascript -e 'display notification "${msg}" with title "NanoClaw" sound name "Basso"'`);
+
+      // Give notification time to display, then exit
+      setTimeout(() => process.exit(1), 1000);
     }
 
     if (connection === 'close') {
