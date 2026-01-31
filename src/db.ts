@@ -22,6 +22,7 @@ export function initDatabase(): void {
       id TEXT,
       chat_jid TEXT,
       sender TEXT,
+      sender_name TEXT,
       content TEXT,
       timestamp TEXT,
       is_from_me INTEGER,
@@ -30,9 +31,14 @@ export function initDatabase(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);
   `);
+
+  // Add sender_name column if it doesn't exist (migration for existing DBs)
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN sender_name TEXT`);
+  } catch { /* column already exists */ }
 }
 
-export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFromMe: boolean): void {
+export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFromMe: boolean, pushName?: string): void {
   if (!msg.key) return;
 
   const content =
@@ -44,12 +50,13 @@ export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFrom
 
   const timestamp = new Date(Number(msg.messageTimestamp) * 1000).toISOString();
   const sender = msg.key.participant || msg.key.remoteJid || '';
+  const senderName = pushName || sender.split('@')[0];
   const msgId = msg.key.id || '';
 
   db.prepare(`INSERT OR REPLACE INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`)
     .run(chatJid, chatJid, timestamp);
-  db.prepare(`INSERT OR REPLACE INTO messages (id, chat_jid, sender, content, timestamp, is_from_me) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(msgId, chatJid, sender, content, timestamp, isFromMe ? 1 : 0);
+  db.prepare(`INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(msgId, chatJid, sender, senderName, content, timestamp, isFromMe ? 1 : 0);
 }
 
 export function getNewMessages(jids: string[], lastTimestamp: string): { messages: NewMessage[]; newTimestamp: string } {
@@ -57,7 +64,7 @@ export function getNewMessages(jids: string[], lastTimestamp: string): { message
 
   const placeholders = jids.map(() => '?').join(',');
   const sql = `
-    SELECT id, chat_jid, sender, content, timestamp
+    SELECT id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
     WHERE timestamp > ? AND chat_jid IN (${placeholders})
     ORDER BY timestamp
@@ -75,7 +82,7 @@ export function getNewMessages(jids: string[], lastTimestamp: string): { message
 
 export function getMessagesSince(chatJid: string, sinceTimestamp: string): NewMessage[] {
   const sql = `
-    SELECT id, chat_jid, sender, content, timestamp
+    SELECT id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
     WHERE chat_jid = ? AND timestamp > ?
     ORDER BY timestamp

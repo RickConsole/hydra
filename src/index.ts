@@ -95,8 +95,7 @@ async function processMessage(msg: NewMessage): Promise<void> {
   // Build prompt with conversation history
   const lines = missedMessages.map(m => {
     const time = new Date(m.timestamp).toLocaleTimeString();
-    const sender = m.sender.split('@')[0];
-    return `[${time}] ${sender}: ${m.content}`;
+    return `[${time}] ${m.sender_name}: ${m.content}`;
   });
   const prompt = lines.join('\n');
 
@@ -213,7 +212,7 @@ async function connectWhatsApp(): Promise<void> {
       if (!msg.message) continue;
       const chatJid = msg.key.remoteJid;
       if (!chatJid || chatJid === 'status@broadcast') continue;
-      storeMessage(msg, chatJid, msg.key.fromMe || false);
+      storeMessage(msg, chatJid, msg.key.fromMe || false, msg.pushName || undefined);
     }
   });
 }
