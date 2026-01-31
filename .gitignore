@@ -19,3 +19,5 @@ logs/
 # IDE
 .idea/
 .vscode/
+
+agents-sdk-docs

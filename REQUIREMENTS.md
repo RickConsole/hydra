@@ -42,14 +42,28 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - Old session IDs are archived to a file
 
 ### Scheduled Tasks
-- Users can ask Claude to schedule cron jobs from any group
-- Tasks run in the context of the group that created them (with that group's memory)
-- Task output is logged to the group's folder
+- Users can ask Claude to schedule recurring or one-time tasks from any group
+- Tasks run as full agents in the context of the group that created them
+- Tasks have access to the same tools as regular messages (except Bash)
+- Tasks can optionally send messages to their group via `send_message` tool, or complete silently
+- Task runs are logged to the database with duration and result
+- Schedule types: cron expressions, intervals (ms), or one-time (ISO timestamp)
+- From main: can schedule tasks for any group, view/manage all tasks
+- From other groups: can only manage that group's tasks
 
 ### Group Management
 - New groups are added explicitly via the main channel
-- Groups are identified by human-readable name when possible
-- Each group gets a dedicated folder
+- Main channel agent has Bash access to query the database and find group JIDs
+- Groups are registered by editing `data/registered_groups.json`
+- Each group gets a dedicated folder under `groups/`
+
+### Main Channel Privileges
+- Main channel is the admin/control group (typically self-chat)
+- Has Bash access for system commands and database queries
+- Can write to global memory (`groups/CLAUDE.md`)
+- Can schedule tasks for any group
+- Can view and manage tasks from all groups
+- Other groups do NOT have Bash access (security measure)
 
 ---
 
@@ -65,8 +79,12 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - Optional, enabled during setup
 
 ### Scheduler
-- MCP server for creating/managing scheduled tasks
-- Tasks execute Claude Agent SDK in group context
+- Built-in scheduler (not external MCP) - runs in-process
+- Custom `nanoclaw` MCP server provides scheduling tools
+- Tools: `schedule_task`, `list_tasks`, `get_task`, `update_task`, `pause_task`, `resume_task`, `cancel_task`, `send_message`
+- Tasks stored in SQLite with run history
+- Scheduler loop checks for due tasks every minute
+- Tasks execute Claude Agent SDK in group context with full tool access
 
 ### Web Access
 - Built-in WebSearch and WebFetch tools

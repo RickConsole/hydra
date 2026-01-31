@@ -17,10 +17,13 @@ import {
   GROUPS_DIR,
   DATA_DIR,
   TRIGGER_PATTERN,
-  CLEAR_COMMAND
+  CLEAR_COMMAND,
+  MAIN_GROUP_FOLDER
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
 import { initDatabase, storeMessage, getNewMessages, getMessagesSince } from './db.js';
+import { createSchedulerMcp } from './scheduler-mcp.js';
+import { startSchedulerLoop } from './scheduler.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -104,7 +107,7 @@ async function processMessage(msg: NewMessage): Promise<void> {
   if (!prompt) return;
 
   logger.info({ group: group.name, messageCount: missedMessages.length }, 'Processing message');
-  const response = await runAgent(group, prompt);
+  const response = await runAgent(group, prompt, msg.chat_jid);
 
   // Update last agent timestamp
   lastAgentTimestamp[msg.chat_jid] = msg.timestamp;
@@ -114,13 +117,26 @@ async function processMessage(msg: NewMessage): Promise<void> {
   }
 }
 
-async function runAgent(group: RegisteredGroup, prompt: string): Promise<string | null> {
+async function runAgent(group: RegisteredGroup, prompt: string, chatJid: string): Promise<string | null> {
   const groupDir = path.join(GROUPS_DIR, group.folder);
   fs.mkdirSync(groupDir, { recursive: true });
 
+  const isMain = group.folder === MAIN_GROUP_FOLDER;
   const sessionId = sessions[group.folder];
   let newSessionId: string | undefined;
   let result: string | null = null;
+
+  // Create scheduler MCP with current group context
+  const schedulerMcp = createSchedulerMcp({
+    groupFolder: group.folder,
+    chatJid,
+    isMain,
+    sendMessage
+  });
+
+  // Main channel gets Bash access for admin tasks (querying DB, etc.)
+  const baseTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'mcp__nanoclaw__*', 'mcp__gmail__*'];
+  const allowedTools = isMain ? [...baseTools, 'Bash'] : baseTools;
 
   try {
     for await (const message of query({
@@ -128,12 +144,12 @@ async function runAgent(group: RegisteredGroup, prompt: string): Promise<string 
       options: {
         cwd: groupDir,
         resume: sessionId,
-        allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'WebFetch'],
+        allowedTools,
         permissionMode: 'bypassPermissions',
         settingSources: ['project'],
         mcpServers: {
-          gmail: { command: 'npx', args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'] },
-          scheduler: { command: 'npx', args: ['-y', 'schedule-task-mcp'] }
+          nanoclaw: schedulerMcp,
+          gmail: { command: 'npx', args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'] }
         }
       }
     })) {
@@ -203,6 +219,7 @@ async function connectWhatsApp(): Promise<void> {
       }
     } else if (connection === 'open') {
       logger.info('Connected to WhatsApp');
+      startSchedulerLoop({ sendMessage });
       startMessageLoop();
     }
   });

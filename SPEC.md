@@ -92,7 +92,9 @@ nanoclaw/
 │   ├── config.ts                  # Configuration constants
 │   ├── types.ts                   # TypeScript interfaces
 │   ├── db.ts                      # Database initialization and queries
-│   └── auth.ts                    # Standalone WhatsApp authentication
+│   ├── auth.ts                    # Standalone WhatsApp authentication
+│   ├── scheduler.ts               # Scheduler loop (runs due tasks)
+│   └── scheduler-mcp.ts           # In-process MCP server for scheduling tools
 │
 ├── dist/                          # Compiled JavaScript (gitignored)
 │
@@ -115,7 +117,7 @@ nanoclaw/
 │
 ├── store/                         # Local data (gitignored)
 │   ├── auth/                      # WhatsApp authentication state
-│   └── messages.db                # SQLite message database
+│   └── messages.db                # SQLite database (messages, scheduled_tasks, task_run_logs)
 │
 ├── data/                          # Application state (gitignored)
 │   ├── sessions.json              # Active session IDs per group
@@ -196,7 +198,9 @@ NanoClaw uses a hierarchical memory system based on CLAUDE.md files.
 
 3. **Main Channel Privileges**
    - Only the "main" group (self-chat) can write to global memory
-   - This prevents other groups from modifying shared context
+   - Main has **Bash access** for admin tasks (querying DB, system commands)
+   - Main can manage registered groups and schedule tasks for any group
+   - Other groups do NOT have Bash access (security measure)
 
 ---
 
@@ -321,35 +325,82 @@ This allows the agent to understand the conversation context even if it wasn't m
 
 ## Scheduled Tasks
 
-NanoClaw can schedule recurring tasks that run at specified times via the scheduler MCP.
+NanoClaw has a built-in scheduler that runs tasks as full agents in their group's context.
+
+### How Scheduling Works
+
+1. **Group Context**: Tasks created in a group run with that group's working directory and memory
+2. **Full Agent Capabilities**: Scheduled tasks have access to all tools (WebSearch, Gmail, file operations, etc.)
+3. **Optional Messaging**: Tasks can send messages to their group using the `send_message` tool, or complete silently
+4. **Main Channel Privileges**: The main channel can schedule tasks for any group and view all tasks
+
+### Schedule Types
+
+| Type | Value Format | Example |
+|------|--------------|---------|
+| `cron` | Cron expression | `0 9 * * 1` (Mondays at 9am) |
+| `interval` | Milliseconds | `3600000` (every hour) |
+| `once` | ISO timestamp | `2024-12-25T09:00:00Z` |
 
 ### Creating a Task
 
 ```
 User: @Andy remind me every Monday at 9am to review the weekly metrics
 
-Claude: [calls mcp__scheduler__create_task]
+Claude: [calls mcp__nanoclaw__schedule_task]
         {
-          "instruction": "Remind user to review weekly metrics",
-          "trigger_type": "cron",
-          "cron_expression": "0 9 * * 1"
+          "prompt": "Send a reminder to review weekly metrics. Be encouraging!",
+          "schedule_type": "cron",
+          "schedule_value": "0 9 * * 1"
         }
 
 Claude: Done! I'll remind you every Monday at 9am.
 ```
 
+### One-Time Tasks
+
+```
+User: @Andy at 5pm today, send me a summary of today's emails
+
+Claude: [calls mcp__nanoclaw__schedule_task]
+        {
+          "prompt": "Search for today's emails, summarize the important ones, and send the summary to the group.",
+          "schedule_type": "once",
+          "schedule_value": "2024-01-31T17:00:00Z"
+        }
+```
+
+### Managing Tasks
+
+From any group:
+- `@Andy list my scheduled tasks` - View tasks for this group
+- `@Andy pause task [id]` - Pause a task
+- `@Andy resume task [id]` - Resume a paused task
+- `@Andy cancel task [id]` - Delete a task
+
+From main channel:
+- `@Andy list all tasks` - View tasks from all groups
+- `@Andy schedule task for "Family Chat": [prompt]` - Schedule for another group
+
 ---
 
 ## MCP Servers
 
-MCP servers are configured in the Claude Agent SDK options:
+### NanoClaw MCP (built-in)
 
-```typescript
-mcpServers: {
-  gmail: { command: 'npx', args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'] },
-  scheduler: { command: 'npx', args: ['-y', 'schedule-task-mcp'] }
-}
-```
+The `nanoclaw` MCP server is created dynamically per agent call with the current group's context.
+
+**Available Tools:**
+| Tool | Purpose |
+|------|---------|
+| `schedule_task` | Schedule a recurring or one-time task |
+| `list_tasks` | Show tasks (group's tasks, or all if main) |
+| `get_task` | Get task details and run history |
+| `update_task` | Modify task prompt or schedule |
+| `pause_task` | Pause a task |
+| `resume_task` | Resume a paused task |
+| `cancel_task` | Delete a task |
+| `send_message` | Send a WhatsApp message to the group |
 
 ### Gmail MCP (@gongrzhe/server-gmail-autoauth-mcp)
 
@@ -362,18 +413,6 @@ Provides email capabilities. Requires Google Cloud OAuth setup.
 | `get_message` | Read full email |
 | `send_message` | Send email |
 | `reply_message` | Reply to thread |
-
-### Scheduler MCP (schedule-task-mcp)
-
-Provides cron-style task scheduling.
-
-**Available Tools:**
-| Tool | Purpose |
-|------|---------|
-| `create_task` | Schedule a new task |
-| `list_tasks` | Show scheduled tasks |
-| `delete_task` | Cancel a task |
-| `update_task` | Modify schedule |
 
 ---
 
@@ -450,6 +489,7 @@ WhatsApp messages could contain malicious instructions attempting to manipulate 
 - Only registered groups are processed
 - Trigger word required (reduces accidental processing)
 - Main channel has elevated privileges (isolated from other groups)
+- Regular groups do NOT have Bash access (only main does)
 - Claude's built-in safety training
 
 **Recommendations:**
