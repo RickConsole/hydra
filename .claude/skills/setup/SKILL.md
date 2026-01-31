@@ -5,182 +5,187 @@ description: Run initial NanoClaw setup. Use when user wants to install dependen
 
 # NanoClaw Setup
 
-**IMPORTANT**: Run all commands automatically. Only pause for user action when physical interaction is required (scanning QR codes). Give clear instructions for exactly what the user needs to do.
+Run all commands automatically. Only pause when user action is required (scanning QR codes).
 
-## 1. Check Prerequisites
-
-Run these checks. Install any that are missing:
+## 1. Install Dependencies
 
 ```bash
-python3 --version  # Need 3.10+
-node --version     # Need 18+
-uv --version
+npm install
 ```
 
-If missing, install automatically:
-- **uv**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- **node**: `brew install node`
-- **python**: `brew install python@3.10`
-
-## 2. Install Dependencies
-
-Run all of these automatically:
-
-```bash
-# Python dependencies
-uv venv && source .venv/bin/activate && uv pip install -r requirements.txt
-```
-
-```bash
-# WhatsApp bridge dependencies
-cd bridge && npm install
-```
-
-```bash
-# Create logs directory
-mkdir -p logs
-```
-
-## 3. WhatsApp Authentication
+## 2. WhatsApp Authentication
 
 **USER ACTION REQUIRED**
 
-Run the bridge in background and monitor for connection:
+Run the authentication script:
 
 ```bash
-cd bridge && node bridge.js > /tmp/bridge_output.log 2>&1 &
-BRIDGE_PID=$!
+npm run auth
 ```
 
 Tell the user:
-> A QR code will appear below. On your phone:
+> A QR code will appear. On your phone:
 > 1. Open WhatsApp
 > 2. Tap **Settings → Linked Devices → Link a Device**
 > 3. Scan the QR code
 
-Then poll for either QR code or successful connection (check every 2 seconds for up to 3 minutes):
+Wait for the script to output "Successfully authenticated" then continue.
+
+If it says "Already authenticated", skip to the next step.
+
+## 3. Register Main Channel
+
+Ask the user:
+> Do you want to use your **personal chat** (message yourself) or a **WhatsApp group** as your main control channel?
+
+For personal chat:
+> Send any message to yourself in WhatsApp (the "Message Yourself" chat). Tell me when done.
+
+For group:
+> Send any message in the WhatsApp group you want to use as your main channel. Tell me when done.
+
+After user confirms, start the app briefly to capture the message:
 
 ```bash
-cat /tmp/bridge_output.log  # Look for QR code or "Connected to WhatsApp!"
+timeout 10 npm run dev || true
 ```
 
-When you see "Connected to WhatsApp!" in the output, stop the bridge:
+Then find the JID from the database:
+
 ```bash
-kill $BRIDGE_PID
+# For personal chat (ends with @s.whatsapp.net)
+sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@s.whatsapp.net' ORDER BY timestamp DESC LIMIT 5"
+
+# For group (ends with @g.us)
+sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@g.us' ORDER BY timestamp DESC LIMIT 5"
 ```
 
-Session persists until logged out from WhatsApp.
+Get the assistant name from environment or default:
+```bash
+echo ${ASSISTANT_NAME:-Andy}
+```
+
+Create/update `data/registered_groups.json`:
+```json
+{
+  "THE_JID_HERE": {
+    "name": "main",
+    "folder": "main",
+    "trigger": "@Andy",
+    "added_at": "2026-01-31T12:00:00Z"
+  }
+}
+```
+
+Ensure the groups folder exists:
+```bash
+mkdir -p groups/main/logs
+```
 
 ## 4. Gmail Authentication (Optional)
 
-**Skip this step** unless user specifically needs Gmail integration. It requires Google Cloud Platform OAuth credentials setup.
+Ask the user:
+> Do you want to enable Gmail integration for reading/sending emails?
 
-If needed, user must first:
-1. Create a GCP project
-2. Enable Gmail API
-3. Create OAuth 2.0 credentials
-4. Download credentials to `~/.gmail-mcp/gcp-oauth.keys.json`
+If yes, they need Google Cloud Platform OAuth credentials first:
+1. Create a GCP project at https://console.cloud.google.com
+2. Enable the Gmail API
+3. Create OAuth 2.0 credentials (Desktop app)
+4. Download and save to `~/.gmail-mcp/gcp-oauth.keys.json`
 
 Then run:
 ```bash
 npx -y @gongrzhe/server-gmail-autoauth-mcp
 ```
 
-## 5. Register Main Channel
+This will open a browser for OAuth consent. After authorization, credentials are cached.
 
-Ask the user:
-> Do you want to use a **personal chat** (message yourself) or a **WhatsApp group** as your main channel?
+## 5. Configure launchd Service
 
-For personal chat:
-> Send a test message to yourself in WhatsApp. Tell me when done.
-
-For group:
-> Send a message in the WhatsApp group you want to use. Tell me when done.
-
-After user confirms, find the JID:
+Get the actual paths:
 
 ```bash
-# For personal chat
-sqlite3 bridge/store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid NOT LIKE '%@g.us' ORDER BY rowid DESC LIMIT 5"
-
-# For group
-sqlite3 bridge/store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@g.us' ORDER BY rowid DESC LIMIT 5"
+which node
+pwd
 ```
 
-Read the assistant name from `src/config.py` (look for `ASSISTANT_NAME = "..."`).
+Create the plist file at `~/Library/LaunchAgents/com.nanoclaw.plist`:
 
-Then update `data/registered_groups.json`:
-```json
-{
-  "THE_JID_HERE": {
-    "name": "main",
-    "folder": "main",
-    "trigger": "@AssistantName",
-    "added_at": "CURRENT_TIMESTAMP_ISO"
-  }
-}
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nanoclaw</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>NODE_PATH_HERE</string>
+        <string>PROJECT_PATH_HERE/dist/index.js</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>PROJECT_PATH_HERE</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:HOME_PATH_HERE/.local/bin</string>
+        <key>HOME</key>
+        <string>HOME_PATH_HERE</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>PROJECT_PATH_HERE/logs/nanoclaw.log</string>
+    <key>StandardErrorPath</key>
+    <string>PROJECT_PATH_HERE/logs/nanoclaw.error.log</string>
+</dict>
+</plist>
 ```
 
-## 6. Configure launchd
+Replace the placeholders with actual paths from the commands above.
 
-First, detect the actual paths:
+Build and start the service:
 
 ```bash
-which node    # Get actual node path (may be nvm, homebrew, etc.)
+npm run build
+mkdir -p logs
+launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
 ```
 
-Create plist files directly in `~/Library/LaunchAgents/` with:
-
-**com.nanoclaw.bridge.plist:**
-- ProgramArguments: `[actual_node_path, /Users/.../nanoclaw/bridge/bridge.js]`
-- WorkingDirectory: `/Users/.../nanoclaw/bridge`
-- StandardOutPath/StandardErrorPath: `/Users/.../nanoclaw/logs/bridge.log` and `bridge.error.log`
-
-**com.nanoclaw.router.plist:**
-- ProgramArguments: `[/Users/.../nanoclaw/.venv/bin/python, -u, /Users/.../nanoclaw/src/router.py]`
-  - The `-u` flag is required for unbuffered output (so logs appear immediately)
-- WorkingDirectory: `/Users/.../nanoclaw`
-- EnvironmentVariables:
-  - `PATH`: `/Users/USERNAME/.local/bin:/usr/local/bin:/usr/bin:/bin` (must include path to `claude` CLI)
-  - `HOME`: `/Users/USERNAME` (required for Claude CLI to find its config)
-- StandardOutPath/StandardErrorPath: `/Users/.../nanoclaw/logs/router.log` and `router.error.log`
-
-**NOTE**: Do NOT set ANTHROPIC_API_KEY - the Claude CLI handles its own authentication.
-
-Then load the services:
-```bash
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.bridge.plist
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.router.plist
-```
-
-Verify they're running:
+Verify it's running:
 ```bash
 launchctl list | grep nanoclaw
 ```
 
-## 7. Test
+## 6. Test
 
-Wait a few seconds for services to start, then tell the user:
-> Send `@AssistantName hello` in your registered chat/group.
+Tell the user:
+> Send `@Andy hello` in your registered chat.
 
-Check `logs/router.log` for activity:
+Check the logs:
 ```bash
-tail -f logs/router.log
+tail -f logs/nanoclaw.log
 ```
 
-If there are issues, also check:
-- `logs/router.error.log`
-- `logs/bridge.log`
-- `logs/bridge.error.log`
+The user should receive a response in WhatsApp.
 
 ## Troubleshooting
 
-**"Command failed with exit code 1"** - Usually means the Claude CLI isn't in PATH. Verify PATH in the router plist includes the directory containing `claude` (typically `~/.local/bin`).
+**Service not starting**: Check `logs/nanoclaw.error.log`
 
-**Messages received but no WhatsApp response** - Check that the bridge HTTP server is running:
+**No response to messages**:
+- Verify the trigger pattern matches (`@Andy` at start of message)
+- Check that the chat JID is in `data/registered_groups.json`
+- Check `logs/nanoclaw.log` for errors
+
+**WhatsApp disconnected**:
+- The service will show a macOS notification
+- Run `npm run auth` to re-authenticate
+- Restart the service: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
+
+**Unload service**:
 ```bash
-curl -s http://127.0.0.1:3141/send -X POST -H "Content-Type: application/json" -d '{"jid":"test","message":"test"}'
+launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
 ```
-Should return an error about invalid JID (not connection refused).
-
-**Router not processing messages** - Check the trigger pattern matches. Messages must start with the trigger (e.g., `@Andy hello`).

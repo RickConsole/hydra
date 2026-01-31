@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "auth": "tsx src/auth.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
@@ -16,11 +17,13 @@
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "better-sqlite3": "^11.8.1",
     "pino": "^9.6.0",
-    "pino-pretty": "^13.0.0"
+    "pino-pretty": "^13.0.0",
+    "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
+    "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
