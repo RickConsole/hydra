@@ -18,11 +18,12 @@ This skill helps users add capabilities or modify behavior. Use AskUserQuestion 
 
 | File | Purpose |
 |------|---------|
-| `src/config.py` | Assistant name, trigger pattern, settings |
-| `src/router.py` | Message routing, polling, agent invocation |
-| `src/scheduler_worker.py` | Scheduled task execution |
-| `src/commands.py` | Command handlers |
-| `.mcp.json` | MCP server configuration |
+| `src/config.ts` | Assistant name, trigger pattern, directories |
+| `src/index.ts` | Message routing, WhatsApp connection, agent invocation |
+| `src/db.ts` | Database initialization and queries |
+| `src/types.ts` | TypeScript interfaces |
+| `src/auth.ts` | Standalone WhatsApp authentication script |
+| `.mcp.json` | MCP server configuration (reference) |
 | `groups/CLAUDE.md` | Global memory/persona |
 
 ## Common Customization Patterns
@@ -36,9 +37,9 @@ Questions to ask:
 - Should messages from this channel go to existing groups or new ones?
 
 Implementation pattern:
-1. Find/add MCP server for the channel to `.mcp.json`
-2. Add polling function in `router.py` (similar to `get_new_messages()`)
-3. Add to main loop to poll both sources
+1. Find/add MCP server for the channel
+2. Add connection and message handling in `src/index.ts`
+3. Store messages in the database (update `src/db.ts` if needed)
 4. Ensure responses route back to correct channel
 
 ### Adding a New MCP Integration
@@ -49,8 +50,8 @@ Questions to ask:
 - Which groups should have access?
 
 Implementation:
-1. Add MCP server config to `.mcp.json`
-2. Add tools to `allowed_tools` in `router.py`
+1. Add MCP server to the `mcpServers` config in `src/index.ts`
+2. Add tools to `allowedTools` array
 3. Document in `groups/CLAUDE.md`
 
 ### Changing Assistant Behavior
@@ -59,7 +60,7 @@ Questions to ask:
 - What aspect? (name, trigger, persona, response style)
 - Apply to all groups or specific ones?
 
-Simple changes → edit `src/config.py`
+Simple changes → edit `src/config.ts`
 Persona changes → edit `groups/CLAUDE.md`
 Per-group behavior → edit specific group's `CLAUDE.md`
 
@@ -71,8 +72,8 @@ Questions to ask:
 - Does it need new MCP tools?
 
 Implementation:
-1. Add handler function in `src/commands.py`
-2. Claude will recognize natural language and call the function
+1. Add command handling in `processMessage()` in `src/index.ts`
+2. Follow the pattern used for `/clear`
 
 ### Changing Deployment
 
@@ -89,9 +90,10 @@ Implementation:
 
 Always tell the user:
 ```bash
-# Restart to apply changes
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.router.plist
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.router.plist
+# Rebuild and restart
+npm run build
+launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
 ```
 
 ## Example Interaction
@@ -100,7 +102,7 @@ User: "Add Telegram as an input channel"
 
 1. Ask: "Should Telegram use the same @Andy trigger, or a different one?"
 2. Ask: "Should Telegram messages create separate conversation contexts, or share with WhatsApp groups?"
-3. Find Telegram MCP (e.g., telegram-mcp)
-4. Add polling for Telegram in router.py
-5. Update .mcp.json
+3. Find Telegram MCP or library
+4. Add connection handling in index.ts
+5. Update message storage in db.ts
 6. Tell user how to authenticate and test

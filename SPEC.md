@@ -88,10 +88,13 @@ nanoclaw/
 ├── .gitignore
 │
 ├── src/
-│   └── index.ts                   # Main application (WhatsApp + routing + agent)
+│   ├── index.ts                   # Main application (WhatsApp + routing + agent)
+│   ├── config.ts                  # Configuration constants
+│   ├── types.ts                   # TypeScript interfaces
+│   ├── db.ts                      # Database initialization and queries
+│   └── auth.ts                    # Standalone WhatsApp authentication
 │
 ├── dist/                          # Compiled JavaScript (gitignored)
-│   └── index.js
 │
 ├── .claude/
 │   └── skills/
@@ -118,7 +121,7 @@ nanoclaw/
 │   ├── sessions.json              # Active session IDs per group
 │   ├── archived_sessions.json     # Old sessions after /clear
 │   ├── registered_groups.json     # Group JID → folder mapping
-│   └── router_state.json          # Last processed timestamp
+│   └── router_state.json          # Last processed timestamp + last agent timestamps
 │
 ├── logs/                          # Runtime logs (gitignored)
 │   ├── nanoclaw.log               # stdout
@@ -132,16 +135,17 @@ nanoclaw/
 
 ## Configuration
 
-Configuration is done via environment variables and the CONFIG object in `src/index.ts`:
+Configuration constants are in `src/config.ts`:
 
 ```typescript
-const CONFIG = {
-  assistantName: process.env.ASSISTANT_NAME || 'Andy',
-  pollInterval: 2000, // ms
-  storeDir: './store',
-  groupsDir: './groups',
-  dataDir: './data',
-};
+export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
+export const POLL_INTERVAL = 2000;
+export const STORE_DIR = './store';
+export const GROUPS_DIR = './groups';
+export const DATA_DIR = './data';
+
+export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
+export const CLEAR_COMMAND = '/clear';
 ```
 
 ### Changing the Assistant Name
@@ -152,9 +156,9 @@ Set the `ASSISTANT_NAME` environment variable:
 ASSISTANT_NAME=Bot npm start
 ```
 
-Or edit the default in `src/index.ts`. This changes:
+Or edit the default in `src/config.ts`. This changes:
 - The trigger pattern (messages must start with `@YourName`)
-- The response prefix (`YourName:`)
+- The response prefix (`YourName:` added automatically)
 
 ### Placeholder Values in launchd
 
@@ -248,16 +252,16 @@ When a user sends `/clear` in any group:
    └── Is message "/clear"? → Yes: handle specially
    │
    ▼
-6. Router prepares invocation:
-   ├── Load session ID for this group
-   ├── Determine group folder path
-   └── Strip trigger word from message
+6. Router catches up conversation:
+   ├── Fetch all messages since last agent interaction
+   ├── Format with timestamp and sender name
+   └── Build prompt with full conversation context
    │
    ▼
 7. Router invokes Claude Agent SDK:
    ├── cwd: groups/{group-name}/
-   ├── prompt: user's message
-   ├── resume: session_id (or undefined)
+   ├── prompt: conversation history + current message
+   ├── resume: session_id (for continuity)
    └── mcpServers: gmail, scheduler
    │
    ▼
@@ -266,10 +270,10 @@ When a user sends `/clear` in any group:
    └── Uses tools as needed (search, email, etc.)
    │
    ▼
-9. Router captures result and sends via WhatsApp
+9. Router prefixes response with assistant name and sends via WhatsApp
    │
    ▼
-10. Router saves new session ID
+10. Router updates last agent timestamp and saves session ID
 ```
 
 ### Trigger Word Matching
@@ -280,6 +284,18 @@ Messages must start with the trigger pattern (default: `@Andy`):
 - `Hey @Andy` → ❌ Ignored (trigger not at start)
 - `What's up?` → ❌ Ignored (no trigger)
 - `/clear` → ✅ Special command (no trigger needed)
+
+### Conversation Catch-Up
+
+When a triggered message arrives, the agent receives all messages since its last interaction in that chat. Each message is formatted with timestamp and sender name:
+
+```
+[Jan 31 2:32 PM] John: hey everyone, should we do pizza tonight?
+[Jan 31 2:33 PM] Sarah: sounds good to me
+[Jan 31 2:35 PM] John: @Andy what toppings do you recommend?
+```
+
+This allows the agent to understand the conversation context even if it wasn't mentioned in every message.
 
 ---
 
