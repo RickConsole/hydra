@@ -2,12 +2,10 @@ import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
   makeCacheableSignalKeyStore,
-  WASocket,
-  proto
+  WASocket
 } from '@whiskeysockets/baileys';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pino from 'pino';
-import Database from 'better-sqlite3';
 import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -22,41 +20,17 @@ import {
   CLEAR_COMMAND
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
+import { initDatabase, closeDatabase, storeMessage, getNewMessages } from './db.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: { target: 'pino-pretty', options: { colorize: true } }
 });
 
-let db: Database.Database;
 let sock: WASocket;
 let lastTimestamp = '';
 let sessions: Session = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
-
-function initDatabase(dbPath: string): Database.Database {
-  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  const database = new Database(dbPath);
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS chats (
-      jid TEXT PRIMARY KEY,
-      name TEXT,
-      last_message_time TEXT
-    );
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT,
-      chat_jid TEXT,
-      sender TEXT,
-      content TEXT,
-      timestamp TEXT,
-      is_from_me INTEGER,
-      PRIMARY KEY (id, chat_jid),
-      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-    );
-    CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);
-  `);
-  return database;
-}
 
 function loadJson<T>(filePath: string, defaultValue: T): T {
   try {
@@ -86,48 +60,6 @@ function loadState(): void {
 function saveState(): void {
   saveJson(path.join(DATA_DIR, 'router_state.json'), { last_timestamp: lastTimestamp });
   saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
-}
-
-function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFromMe: boolean): void {
-  if (!msg.key) return;
-
-  const content =
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    msg.message?.imageMessage?.caption ||
-    msg.message?.videoMessage?.caption ||
-    '';
-
-  const timestamp = new Date(Number(msg.messageTimestamp) * 1000).toISOString();
-  const sender = msg.key.participant || msg.key.remoteJid || '';
-  const msgId = msg.key.id || '';
-
-  try {
-    db.prepare(`INSERT OR REPLACE INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`).run(chatJid, chatJid, timestamp);
-    db.prepare(`INSERT OR REPLACE INTO messages (id, chat_jid, sender, content, timestamp, is_from_me) VALUES (?, ?, ?, ?, ?, ?)`).run(msgId, chatJid, sender, content, timestamp, isFromMe ? 1 : 0);
-    logger.debug({ chatJid, msgId }, 'Message stored');
-  } catch (err) {
-    logger.error({ err, msgId }, 'Failed to store message');
-  }
-}
-
-function getNewMessages(): NewMessage[] {
-  const jids = Object.keys(registeredGroups);
-  if (jids.length === 0) return [];
-
-  const placeholders = jids.map(() => '?').join(',');
-  const sql = `
-    SELECT id, chat_jid, sender, content, timestamp
-    FROM messages
-    WHERE timestamp > ? AND chat_jid IN (${placeholders})
-    ORDER BY timestamp
-  `;
-
-  const rows = db.prepare(sql).all(lastTimestamp, ...jids) as NewMessage[];
-  for (const row of rows) {
-    if (row.timestamp > lastTimestamp) lastTimestamp = row.timestamp;
-  }
-  return rows;
 }
 
 async function processMessage(msg: NewMessage): Promise<void> {
@@ -281,7 +213,10 @@ async function startMessageLoop(): Promise<void> {
 
   while (true) {
     try {
-      const messages = getNewMessages();
+      const jids = Object.keys(registeredGroups);
+      const { messages, newTimestamp } = getNewMessages(jids, lastTimestamp);
+      lastTimestamp = newTimestamp;
+
       if (messages.length > 0) logger.info({ count: messages.length }, 'New messages');
       for (const msg of messages) await processMessage(msg);
       saveState();
@@ -293,14 +228,14 @@ async function startMessageLoop(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  db = initDatabase(path.join(STORE_DIR, 'messages.db'));
+  initDatabase();
   logger.info('Database initialized');
   loadState();
   await connectWhatsApp();
 
   const shutdown = () => {
     logger.info('Shutting down...');
-    db.close();
+    closeDatabase();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
