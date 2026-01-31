@@ -33,7 +33,16 @@ Wait for the script to output "Successfully authenticated" then continue.
 
 If it says "Already authenticated", skip to the next step.
 
-## 3. Register Main Channel
+## 3. Configure Assistant Name
+
+Ask the user:
+> What trigger word do you want to use? (default: `Andy`)
+>
+> Messages starting with `@TriggerWord` will be sent to Claude.
+
+Store their choice - you'll use it when creating the registered_groups.json and when telling them how to test.
+
+## 4. Register Main Channel
 
 Ask the user:
 > Do you want to use your **personal chat** (message yourself) or a **WhatsApp group** as your main control channel?
@@ -60,19 +69,14 @@ sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid
 sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@g.us' ORDER BY timestamp DESC LIMIT 5"
 ```
 
-Get the assistant name from environment or default:
-```bash
-echo ${ASSISTANT_NAME:-Andy}
-```
-
-Create/update `data/registered_groups.json`:
+Create/update `data/registered_groups.json` using the JID from above and the assistant name from step 3:
 ```json
 {
-  "THE_JID_HERE": {
+  "JID_HERE": {
     "name": "main",
     "folder": "main",
-    "trigger": "@Andy",
-    "added_at": "2026-01-31T12:00:00Z"
+    "trigger": "@ASSISTANT_NAME",
+    "added_at": "CURRENT_ISO_TIMESTAMP"
   }
 }
 ```
@@ -82,16 +86,25 @@ Ensure the groups folder exists:
 mkdir -p groups/main/logs
 ```
 
-## 4. Gmail Authentication (Optional)
+## 5. Gmail Authentication (Optional)
 
 Ask the user:
 > Do you want to enable Gmail integration for reading/sending emails?
+>
+> **Note:** This requires setting up Google Cloud Platform OAuth credentials, which involves:
+> 1. Creating a GCP project
+> 2. Enabling the Gmail API
+> 3. Creating OAuth 2.0 credentials
+> 4. Downloading a credentials file
+>
+> This takes about 5-10 minutes. Skip if you don't need email integration.
 
-If yes, they need Google Cloud Platform OAuth credentials first:
-1. Create a GCP project at https://console.cloud.google.com
-2. Enable the Gmail API
-3. Create OAuth 2.0 credentials (Desktop app)
-4. Download and save to `~/.gmail-mcp/gcp-oauth.keys.json`
+If yes, guide them through the prerequisites:
+1. Go to https://console.cloud.google.com
+2. Create a new project (or use an existing one)
+3. Enable the Gmail API (APIs & Services → Enable APIs → search "Gmail API")
+4. Create OAuth 2.0 credentials (APIs & Services → Credentials → Create Credentials → OAuth client ID → Desktop app)
+5. Download the JSON file and save to `~/.gmail-mcp/gcp-oauth.keys.json`
 
 Then run:
 ```bash
@@ -100,7 +113,7 @@ npx -y @gongrzhe/server-gmail-autoauth-mcp
 
 This will open a browser for OAuth consent. After authorization, credentials are cached.
 
-## 5. Configure launchd Service
+## 6. Configure launchd Service
 
 Get the actual paths:
 
@@ -159,10 +172,10 @@ Verify it's running:
 launchctl list | grep nanoclaw
 ```
 
-## 6. Test
+## 7. Test
 
-Tell the user:
-> Send `@Andy hello` in your registered chat.
+Tell the user (using the assistant name they configured):
+> Send `@ASSISTANT_NAME hello` in your registered chat.
 
 Check the logs:
 ```bash
@@ -176,7 +189,7 @@ The user should receive a response in WhatsApp.
 **Service not starting**: Check `logs/nanoclaw.error.log`
 
 **No response to messages**:
-- Verify the trigger pattern matches (`@Andy` at start of message)
+- Verify the trigger pattern matches (e.g., `@AssistantName` at start of message)
 - Check that the chat JID is in `data/registered_groups.json`
 - Check `logs/nanoclaw.log` for errors
 
