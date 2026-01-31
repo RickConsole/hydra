@@ -1,8 +1,21 @@
+export interface AdditionalMount {
+  hostPath: string;      // Absolute path on host (supports ~ for home)
+  containerPath: string; // Path inside container (under /workspace/extra/)
+  readonly?: boolean;    // Default: true for safety
+}
+
+export interface ContainerConfig {
+  additionalMounts?: AdditionalMount[];
+  timeout?: number;  // Default: 300000 (5 minutes)
+  env?: Record<string, string>;
+}
+
 export interface RegisteredGroup {
   name: string;
   folder: string;
   trigger: string;
   added_at: string;
+  containerConfig?: ContainerConfig;
 }
 
 export interface Session {

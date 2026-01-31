@@ -1,12 +1,11 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
 import { CronExpressionParser } from 'cron-parser';
-import { getDueTasks, updateTaskAfterRun, logTaskRun, getTaskById } from './db.js';
-import { createSchedulerMcp } from './scheduler-mcp.js';
-import { ScheduledTask } from './types.js';
-import { GROUPS_DIR, SCHEDULER_POLL_INTERVAL } from './config.js';
+import { getDueTasks, updateTaskAfterRun, logTaskRun, getTaskById, getAllTasks } from './db.js';
+import { ScheduledTask, RegisteredGroup } from './types.js';
+import { GROUPS_DIR, SCHEDULER_POLL_INTERVAL, DATA_DIR } from './config.js';
+import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -15,6 +14,7 @@ const logger = pino({
 
 export interface SchedulerDependencies {
   sendMessage: (jid: string, text: string) => Promise<void>;
+  registeredGroups: () => Record<string, RegisteredGroup>;
 }
 
 async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promise<void> {
@@ -24,37 +24,53 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
 
   logger.info({ taskId: task.id, group: task.group_folder }, 'Running scheduled task');
 
-  // Create the scheduler MCP with task's group context
-  const schedulerMcp = createSchedulerMcp({
-    groupFolder: task.group_folder,
-    chatJid: task.chat_jid,
-    isMain: false, // Scheduled tasks run in their group's context, not as main
-    sendMessage: deps.sendMessage
-  });
+  // Find the group config for this task
+  const groups = deps.registeredGroups();
+  const group = Object.values(groups).find(g => g.folder === task.group_folder);
+
+  if (!group) {
+    logger.error({ taskId: task.id, groupFolder: task.group_folder }, 'Group not found for task');
+    logTaskRun({
+      task_id: task.id,
+      run_at: new Date().toISOString(),
+      duration_ms: Date.now() - startTime,
+      status: 'error',
+      result: null,
+      error: `Group not found: ${task.group_folder}`
+    });
+    return;
+  }
+
+  // Update tasks snapshot for container to read
+  const tasks = getAllTasks();
+  writeTasksSnapshot(tasks.map(t => ({
+    id: t.id,
+    groupFolder: t.group_folder,
+    prompt: t.prompt,
+    schedule_type: t.schedule_type,
+    schedule_value: t.schedule_value,
+    status: t.status,
+    next_run: t.next_run
+  })));
 
   let result: string | null = null;
   let error: string | null = null;
 
   try {
-    for await (const message of query({
+    const output = await runContainerAgent(group, {
       prompt: task.prompt,
-      options: {
-        cwd: groupDir,
-        allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'mcp__nanoclaw__*', 'mcp__gmail__*'],
-        permissionMode: 'bypassPermissions',
-        settingSources: ['project'],
-        mcpServers: {
-          nanoclaw: schedulerMcp,
-          gmail: { command: 'npx', args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'] }
-        }
-      }
-    })) {
-      if ('result' in message && message.result) {
-        result = message.result as string;
-      }
+      groupFolder: task.group_folder,
+      chatJid: task.chat_jid,
+      isMain: false // Scheduled tasks run in their group's context
+    });
+
+    if (output.status === 'error') {
+      error = output.error || 'Unknown error';
+    } else {
+      result = output.result;
     }
 
-    logger.info({ taskId: task.id, durationMs: Date.now() - startTime }, 'Task completed successfully');
+    logger.info({ taskId: task.id, durationMs: Date.now() - startTime }, 'Task completed');
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
     logger.error({ taskId: task.id, error }, 'Task failed');

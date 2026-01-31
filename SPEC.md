@@ -24,8 +24,8 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                            NanoClaw                                  │
-│                     (Single Node.js Process)                         │
+│                        HOST (macOS)                                  │
+│                   (Main Node.js Process)                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌──────────────┐                     ┌────────────────────┐        │
@@ -33,32 +33,37 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 │  │  (baileys)   │◀────────────────────│   (messages.db)    │        │
 │  └──────────────┘   store/send        └─────────┬──────────┘        │
 │                                                  │                   │
-│                                                  ▼                   │
+│         ┌────────────────────────────────────────┘                   │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌───────────────┐  │
+│  │  Message Loop    │    │  Scheduler Loop  │    │  IPC Watcher  │  │
+│  │  (polls SQLite)  │    │  (checks tasks)  │    │  (file-based) │  │
+│  └────────┬─────────┘    └────────┬─────────┘    └───────────────┘  │
+│           │                       │                                  │
+│           └───────────┬───────────┘                                  │
+│                       │ spawns container                             │
+│                       ▼                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                  APPLE CONTAINER (Linux VM)                          │
+├─────────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    MESSAGE LOOP                               │   │
-│  │  • Polls SQLite for new messages every 2 seconds              │   │
-│  │  • Filters: only registered groups, only trigger word         │   │
-│  │  • Loads session ID for conversation continuity               │   │
-│  │  • Invokes Claude Agent SDK in the group's directory          │   │
-│  │  • Sends response back to WhatsApp                            │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                │                                     │
-│                                ▼                                     │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    CLAUDE AGENT SDK                           │   │
+│  │                    AGENT RUNNER                               │   │
 │  │                                                                │   │
-│  │  Working directory: groups/{group-name}/                       │   │
-│  │  Context loaded:                                               │   │
-│  │    • ../CLAUDE.md (global memory)                              │   │
-│  │    • ./CLAUDE.md (group-specific memory)                       │   │
+│  │  Working directory: /workspace/group (mounted from host)       │   │
+│  │  Volume mounts:                                                │   │
+│  │    • groups/{name}/ → /workspace/group                         │   │
+│  │    • groups/CLAUDE.md → /workspace/global/CLAUDE.md            │   │
+│  │    • ~/.claude/ → /root/.claude/ (sessions)                    │   │
+│  │    • Additional dirs → /workspace/extra/*                      │   │
 │  │                                                                │   │
-│  │  Available MCP Servers:                                        │   │
-│  │    • gmail-mcp (read/send email)                               │   │
-│  │    • schedule-task-mcp (create cron jobs)                      │   │
-│  │                                                                │   │
-│  │  Built-in Tools:                                               │   │
+│  │  Tools (all groups):                                           │   │
+│  │    • Bash (safe - sandboxed in container!)                     │   │
+│  │    • Read, Write, Edit, Glob, Grep (file operations)           │   │
 │  │    • WebSearch, WebFetch (internet access)                     │   │
-│  │    • Read, Write, Edit (file operations in group folder)       │   │
+│  │    • agent-browser (browser automation)                        │   │
+│  │    • mcp__nanoclaw__* (scheduler tools via IPC)                │   │
+│  │    • mcp__gmail__* (email)                                     │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
@@ -70,8 +75,10 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 |-----------|------------|---------|
 | WhatsApp Connection | Node.js (@whiskeysockets/baileys) | Connect to WhatsApp, send/receive messages |
 | Message Storage | SQLite (better-sqlite3) | Store messages for polling |
+| Container Runtime | Apple Container | Isolated Linux VMs for agent execution |
 | Agent | @anthropic-ai/claude-agent-sdk | Run Claude with tools and MCP servers |
-| Runtime | Node.js 18+ | Single unified process |
+| Browser Automation | agent-browser + Chromium | Web interaction and screenshots |
+| Runtime | Node.js 22+ | Host process for routing and scheduling |
 
 ---
 
@@ -88,13 +95,25 @@ nanoclaw/
 ├── .gitignore
 │
 ├── src/
-│   ├── index.ts                   # Main application (WhatsApp + routing + agent)
+│   ├── index.ts                   # Main application (WhatsApp + routing)
 │   ├── config.ts                  # Configuration constants
 │   ├── types.ts                   # TypeScript interfaces
 │   ├── db.ts                      # Database initialization and queries
 │   ├── auth.ts                    # Standalone WhatsApp authentication
 │   ├── scheduler.ts               # Scheduler loop (runs due tasks)
-│   └── scheduler-mcp.ts           # In-process MCP server for scheduling tools
+│   └── container-runner.ts        # Spawns agents in Apple Containers
+│
+├── container/
+│   ├── Dockerfile                 # Container image definition
+│   ├── build.sh                   # Build script for container image
+│   ├── agent-runner/              # Code that runs inside the container
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   │       ├── index.ts           # Entry point (reads JSON, runs agent)
+│   │       └── ipc-mcp.ts         # MCP server for host communication
+│   └── skills/
+│       └── agent-browser.md       # Browser automation skill
 │
 ├── dist/                          # Compiled JavaScript (gitignored)
 │
@@ -142,13 +161,46 @@ Configuration constants are in `src/config.ts`:
 ```typescript
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
 export const POLL_INTERVAL = 2000;
+export const SCHEDULER_POLL_INTERVAL = 60000;
 export const STORE_DIR = './store';
 export const GROUPS_DIR = './groups';
 export const DATA_DIR = './data';
 
+// Container configuration
+export const CONTAINER_IMAGE = process.env.CONTAINER_IMAGE || 'nanoclaw-agent:latest';
+export const CONTAINER_TIMEOUT = parseInt(process.env.CONTAINER_TIMEOUT || '300000', 10);
+export const IPC_POLL_INTERVAL = 1000;
+
 export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
 export const CLEAR_COMMAND = '/clear';
 ```
+
+### Container Configuration
+
+Groups can have additional directories mounted via `containerConfig` in `data/registered_groups.json`:
+
+```json
+{
+  "1234567890@g.us": {
+    "name": "Dev Team",
+    "folder": "dev-team",
+    "trigger": "@Andy",
+    "added_at": "2026-01-31T12:00:00Z",
+    "containerConfig": {
+      "additionalMounts": [
+        {
+          "hostPath": "/Users/gavriel/projects/webapp",
+          "containerPath": "webapp",
+          "readonly": false
+        }
+      ],
+      "timeout": 600000
+    }
+  }
+}
+```
+
+Additional mounts appear at `/workspace/extra/{containerPath}` inside the container.
 
 ### Changing the Assistant Name
 
@@ -198,9 +250,9 @@ NanoClaw uses a hierarchical memory system based on CLAUDE.md files.
 
 3. **Main Channel Privileges**
    - Only the "main" group (self-chat) can write to global memory
-   - Main has **Bash access** for admin tasks (querying DB, system commands)
    - Main can manage registered groups and schedule tasks for any group
-   - Other groups do NOT have Bash access (security measure)
+   - Main can configure additional directory mounts for any group
+   - All groups have Bash access (safe because it runs inside container)
 
 ---
 
@@ -481,19 +533,29 @@ tail -f logs/nanoclaw.log
 
 ## Security Considerations
 
+### Container Isolation
+
+All agents run inside Apple Container (lightweight Linux VMs), providing:
+- **Filesystem isolation**: Agents can only access mounted directories
+- **Safe Bash access**: Commands run inside the container, not on your Mac
+- **Network isolation**: Can be configured per-container if needed
+- **Process isolation**: Container processes can't affect the host
+
 ### Prompt Injection Risk
 
 WhatsApp messages could contain malicious instructions attempting to manipulate Claude's behavior.
 
 **Mitigations:**
+- Container isolation limits blast radius
 - Only registered groups are processed
 - Trigger word required (reduces accidental processing)
-- Main channel has elevated privileges (isolated from other groups)
-- Regular groups do NOT have Bash access (only main does)
+- Agents can only access their group's mounted directories
+- Main can configure additional directories per group
 - Claude's built-in safety training
 
 **Recommendations:**
 - Only register trusted groups
+- Review additional directory mounts carefully
 - Review scheduled tasks periodically
 - Monitor logs for unusual activity
 
