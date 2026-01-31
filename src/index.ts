@@ -88,24 +88,19 @@ async function processMessage(msg: NewMessage): Promise<void> {
 
   if (!TRIGGER_PATTERN.test(content)) return;
 
-  const userMessage = content.replace(TRIGGER_PATTERN, '').trim();
-  if (!userMessage) return;
-
   // Get messages since last agent interaction to catch up the session
   const sinceTimestamp = lastAgentTimestamp[msg.chat_jid] || '';
   const missedMessages = getMessagesSince(msg.chat_jid, sinceTimestamp);
 
   // Build prompt with conversation history
-  let prompt = '';
-  for (const m of missedMessages) {
-    if (m.id === msg.id) continue; // Skip current message, we'll add it at the end
+  const lines = missedMessages.map(m => {
     const time = new Date(m.timestamp).toLocaleTimeString();
-    const sender = m.sender.split('@')[0]; // Extract phone number or name
-    prompt += `[${time}] ${sender}: ${m.content}\n`;
-  }
-  const time = new Date(msg.timestamp).toLocaleTimeString();
-  const sender = msg.sender.split('@')[0];
-  prompt += `[${time}] ${sender}: ${userMessage}`;
+    const sender = m.sender.split('@')[0];
+    return `[${time}] ${sender}: ${m.content}`;
+  });
+  const prompt = lines.join('\n');
+
+  if (!prompt) return;
 
   logger.info({ group: group.name, messageCount: missedMessages.length }, 'Processing message');
   const response = await runAgent(group, prompt);
