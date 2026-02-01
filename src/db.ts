@@ -66,6 +66,19 @@ export function initDatabase(): void {
   } catch { /* column already exists */ }
 }
 
+/**
+ * Store chat metadata only (no message content).
+ * Used for all chats to enable group discovery without storing sensitive content.
+ */
+export function storeChatMetadata(chatJid: string, timestamp: string): void {
+  db.prepare(`INSERT OR REPLACE INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`)
+    .run(chatJid, chatJid, timestamp);
+}
+
+/**
+ * Store a message with full content.
+ * Only call this for registered groups where message history is needed.
+ */
 export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFromMe: boolean, pushName?: string): void {
   if (!msg.key) return;
 
@@ -81,8 +94,6 @@ export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFrom
   const senderName = pushName || sender.split('@')[0];
   const msgId = msg.key.id || '';
 
-  db.prepare(`INSERT OR REPLACE INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`)
-    .run(chatJid, chatJid, timestamp);
   db.prepare(`INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .run(msgId, chatJid, sender, senderName, content, timestamp, isFromMe ? 1 : 0);
 }

@@ -19,7 +19,7 @@ import {
   IPC_POLL_INTERVAL
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
-import { initDatabase, storeMessage, getNewMessages, getMessagesSince, getAllTasks } from './db.js';
+import { initDatabase, storeMessage, storeChatMetadata, getNewMessages, getMessagesSince, getAllTasks, getTaskById } from './db.js';
 import { startSchedulerLoop } from './scheduler.js';
 import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
 
@@ -233,7 +233,7 @@ async function processTaskIpc(data: {
   isMain?: boolean;
 }): Promise<void> {
   // Import db functions dynamically to avoid circular deps
-  const { createTask, updateTask, deleteTask } = await import('./db.js');
+  const { createTask, updateTask, deleteTask, getTaskById: getTask } = await import('./db.js');
   const { CronExpressionParser } = await import('cron-parser');
 
   switch (data.type) {
@@ -271,22 +271,37 @@ async function processTaskIpc(data: {
 
     case 'pause_task':
       if (data.taskId) {
-        updateTask(data.taskId, { status: 'paused' });
-        logger.info({ taskId: data.taskId }, 'Task paused via IPC');
+        const task = getTask(data.taskId);
+        if (task && (data.isMain || task.group_folder === data.groupFolder)) {
+          updateTask(data.taskId, { status: 'paused' });
+          logger.info({ taskId: data.taskId }, 'Task paused via IPC');
+        } else {
+          logger.warn({ taskId: data.taskId, groupFolder: data.groupFolder }, 'Unauthorized task pause attempt');
+        }
       }
       break;
 
     case 'resume_task':
       if (data.taskId) {
-        updateTask(data.taskId, { status: 'active' });
-        logger.info({ taskId: data.taskId }, 'Task resumed via IPC');
+        const task = getTask(data.taskId);
+        if (task && (data.isMain || task.group_folder === data.groupFolder)) {
+          updateTask(data.taskId, { status: 'active' });
+          logger.info({ taskId: data.taskId }, 'Task resumed via IPC');
+        } else {
+          logger.warn({ taskId: data.taskId, groupFolder: data.groupFolder }, 'Unauthorized task resume attempt');
+        }
       }
       break;
 
     case 'cancel_task':
       if (data.taskId) {
-        deleteTask(data.taskId);
-        logger.info({ taskId: data.taskId }, 'Task cancelled via IPC');
+        const task = getTask(data.taskId);
+        if (task && (data.isMain || task.group_folder === data.groupFolder)) {
+          deleteTask(data.taskId);
+          logger.info({ taskId: data.taskId }, 'Task cancelled via IPC');
+        } else {
+          logger.warn({ taskId: data.taskId, groupFolder: data.groupFolder }, 'Unauthorized task cancel attempt');
+        }
       }
       break;
 
@@ -345,7 +360,16 @@ async function connectWhatsApp(): Promise<void> {
       if (!msg.message) continue;
       const chatJid = msg.key.remoteJid;
       if (!chatJid || chatJid === 'status@broadcast') continue;
-      storeMessage(msg, chatJid, msg.key.fromMe || false, msg.pushName || undefined);
+
+      const timestamp = new Date(Number(msg.messageTimestamp) * 1000).toISOString();
+
+      // Always store chat metadata for group discovery
+      storeChatMetadata(chatJid, timestamp);
+
+      // Only store full message content for registered groups
+      if (registeredGroups[chatJid]) {
+        storeMessage(msg, chatJid, msg.key.fromMe || false, msg.pushName || undefined);
+      }
     }
   });
 }

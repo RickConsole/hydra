@@ -237,34 +237,64 @@ export async function runContainerAgent(
       clearTimeout(timeout);
       const duration = Date.now() - startTime;
 
-      // Always write stderr to log file for debugging
+      // Write container log file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const logFile = path.join(logsDir, `container-${timestamp}.log`);
-      const logContent = [
+      const isVerbose = process.env.LOG_LEVEL === 'debug' || process.env.LOG_LEVEL === 'trace';
+
+      // Build log content - only include full input/output in verbose mode
+      const logLines = [
         `=== Container Run Log ===`,
         `Timestamp: ${new Date().toISOString()}`,
         `Group: ${group.name}`,
         `IsMain: ${input.isMain}`,
         `Duration: ${duration}ms`,
         `Exit Code: ${code}`,
-        ``,
-        `=== Input ===`,
-        JSON.stringify(input, null, 2),
-        ``,
-        `=== Container Args ===`,
-        containerArgs.join(' '),
-        ``,
-        `=== Mounts ===`,
-        mounts.map(m => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`).join('\n'),
-        ``,
-        `=== Stderr ===`,
-        stderr,
-        ``,
-        `=== Stdout ===`,
-        stdout
-      ].join('\n');
-      fs.writeFileSync(logFile, logContent);
-      logger.debug({ logFile }, 'Container log written');
+        ``
+      ];
+
+      if (isVerbose) {
+        // Full content logging only in debug/trace mode
+        logLines.push(
+          `=== Input ===`,
+          JSON.stringify(input, null, 2),
+          ``,
+          `=== Container Args ===`,
+          containerArgs.join(' '),
+          ``,
+          `=== Mounts ===`,
+          mounts.map(m => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`).join('\n'),
+          ``,
+          `=== Stderr ===`,
+          stderr,
+          ``,
+          `=== Stdout ===`,
+          stdout
+        );
+      } else {
+        // Minimal logging by default - no message content
+        logLines.push(
+          `=== Input Summary ===`,
+          `Prompt length: ${input.prompt.length} chars`,
+          `Session ID: ${input.sessionId || 'new'}`,
+          ``,
+          `=== Mounts ===`,
+          mounts.map(m => `${m.containerPath}${m.readonly ? ' (ro)' : ''}`).join('\n'),
+          ``
+        );
+
+        // Only include stderr/stdout if there was an error
+        if (code !== 0) {
+          logLines.push(
+            `=== Stderr (last 500 chars) ===`,
+            stderr.slice(-500),
+            ``
+          );
+        }
+      }
+
+      fs.writeFileSync(logFile, logLines.join('\n'));
+      logger.debug({ logFile, verbose: isVerbose }, 'Container log written');
 
       if (code !== 0) {
         logger.error({
