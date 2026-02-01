@@ -11,6 +11,7 @@ import pino from 'pino';
 import {
   CONTAINER_IMAGE,
   CONTAINER_TIMEOUT,
+  CONTAINER_MAX_OUTPUT_SIZE,
   GROUPS_DIR,
   DATA_DIR
 } from './config.js';
@@ -216,19 +217,39 @@ export async function runContainerAgent(
 
     let stdout = '';
     let stderr = '';
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
 
     container.stdin.write(JSON.stringify(input));
     container.stdin.end();
 
     container.stdout.on('data', (data) => {
-      stdout += data.toString();
+      if (stdoutTruncated) return;
+      const chunk = data.toString();
+      const remaining = CONTAINER_MAX_OUTPUT_SIZE - stdout.length;
+      if (chunk.length > remaining) {
+        stdout += chunk.slice(0, remaining);
+        stdoutTruncated = true;
+        logger.warn({ group: group.name, size: stdout.length }, 'Container stdout truncated due to size limit');
+      } else {
+        stdout += chunk;
+      }
     });
 
     container.stderr.on('data', (data) => {
-      stderr += data.toString();
-      const lines = data.toString().trim().split('\n');
+      const chunk = data.toString();
+      const lines = chunk.trim().split('\n');
       for (const line of lines) {
         if (line) logger.debug({ container: group.folder }, line);
+      }
+      if (stderrTruncated) return;
+      const remaining = CONTAINER_MAX_OUTPUT_SIZE - stderr.length;
+      if (chunk.length > remaining) {
+        stderr += chunk.slice(0, remaining);
+        stderrTruncated = true;
+        logger.warn({ group: group.name, size: stderr.length }, 'Container stderr truncated due to size limit');
+      } else {
+        stderr += chunk;
       }
     });
 
@@ -257,6 +278,8 @@ export async function runContainerAgent(
         `IsMain: ${input.isMain}`,
         `Duration: ${duration}ms`,
         `Exit Code: ${code}`,
+        `Stdout Truncated: ${stdoutTruncated}`,
+        `Stderr Truncated: ${stderrTruncated}`,
         ``
       ];
 
@@ -271,10 +294,10 @@ export async function runContainerAgent(
           `=== Mounts ===`,
           mounts.map(m => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`).join('\n'),
           ``,
-          `=== Stderr ===`,
+          `=== Stderr${stderrTruncated ? ' (TRUNCATED)' : ''} ===`,
           stderr,
           ``,
-          `=== Stdout ===`,
+          `=== Stdout${stdoutTruncated ? ' (TRUNCATED)' : ''} ===`,
           stdout
         );
       } else {
