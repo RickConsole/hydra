@@ -19,7 +19,11 @@ export const CONTAINER_IMAGE = process.env.CONTAINER_IMAGE || 'nanoclaw-agent:la
 export const CONTAINER_TIMEOUT = parseInt(process.env.CONTAINER_TIMEOUT || '300000', 10);
 export const IPC_POLL_INTERVAL = 1000;
 
-export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export const TRIGGER_PATTERN = new RegExp(`^@${escapeRegex(ASSISTANT_NAME)}\\b`, 'i');
 
 // Timezone for scheduled tasks (cron expressions, etc.)
 // Uses system timezone by default
