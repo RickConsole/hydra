@@ -1,6 +1,10 @@
-# NanoClaw
+<p align="center">
+  <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
+</p>
 
-A personal Claude assistant. Lightweight, secure, and built to be understood and customized for your own needs.
+<p align="center">
+  A personal Claude assistant. Lightweight, secure, and built to be understood and customized for your own needs.
+</p>
 
 ## Why This Exists
 
