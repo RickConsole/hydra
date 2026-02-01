@@ -67,11 +67,16 @@ export function createIpcMcp(ctx: IpcMcpContext) {
 
       tool(
         'schedule_task',
-        'Schedule a recurring or one-time task. The task will run as a full agent with access to all tools.',
+        `Schedule a recurring or one-time task. The task will run as a full agent with access to all tools.
+
+IMPORTANT - schedule_value format depends on schedule_type:
+• cron: Standard cron expression (e.g., "*/5 * * * *" for every 5 minutes, "0 9 * * *" for daily at 9am)
+• interval: Milliseconds between runs (e.g., "300000" for 5 minutes, "3600000" for 1 hour)
+• once: ISO 8601 timestamp (e.g., "2026-02-01T15:30:00.000Z"). Calculate this from current time.`,
         {
           prompt: z.string().describe('What the agent should do when the task runs'),
-          schedule_type: z.enum(['cron', 'interval', 'once']).describe('Type of schedule'),
-          schedule_value: z.string().describe('Cron expression, interval in ms, or ISO timestamp'),
+          schedule_type: z.enum(['cron', 'interval', 'once']).describe('cron=recurring at specific times, interval=recurring every N ms, once=run once at specific time'),
+          schedule_value: z.string().describe('cron: "*/5 * * * *" | interval: milliseconds like "300000" | once: ISO timestamp like "2026-02-01T15:30:00.000Z"'),
           target_group: z.string().optional().describe('Target group folder (main only, defaults to current group)')
         },
         async (args) => {

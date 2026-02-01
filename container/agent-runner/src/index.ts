@@ -14,6 +14,7 @@ interface ContainerInput {
   groupFolder: string;
   chatJid: string;
   isMain: boolean;
+  isScheduledTask?: boolean;
 }
 
 interface ContainerOutput {
@@ -219,11 +220,17 @@ async function main(): Promise<void> {
   let result: string | null = null;
   let newSessionId: string | undefined;
 
+  // Add context for scheduled tasks
+  let prompt = input.prompt;
+  if (input.isScheduledTask) {
+    prompt = `[SCHEDULED TASK - You are running automatically, not in response to a user message. Use mcp__nanoclaw__send_message if needed to communicate with the user.]\n\n${input.prompt}`;
+  }
+
   try {
     log('Starting agent...');
 
     for await (const message of query({
-      prompt: input.prompt,
+      prompt,
       options: {
         cwd: '/workspace/group',
         resume: input.sessionId,

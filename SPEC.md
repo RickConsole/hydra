@@ -53,7 +53,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 │  │  Working directory: /workspace/group (mounted from host)       │   │
 │  │  Volume mounts:                                                │   │
 │  │    • groups/{name}/ → /workspace/group                         │   │
-│  │    • groups/CLAUDE.md → /workspace/global/CLAUDE.md            │   │
+│  │    • groups/global/ → /workspace/global/ (non-main only)        │   │
 │  │    • ~/.claude/ → /home/node/.claude/ (sessions)               │   │
 │  │    • Additional dirs → /workspace/extra/*                      │   │
 │  │                                                                │   │

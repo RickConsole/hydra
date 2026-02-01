@@ -26,6 +26,7 @@ export interface ContainerInput {
   groupFolder: string;
   chatJid: string;
   isMain: boolean;
+  isScheduledTask?: boolean;
 }
 
 export interface ContainerOutput {
@@ -68,12 +69,13 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
       readonly: false
     });
 
-    // Global CLAUDE.md (read-only for non-main)
-    const globalClaudeMd = path.join(GROUPS_DIR, 'CLAUDE.md');
-    if (fs.existsSync(globalClaudeMd)) {
+    // Global memory directory (read-only for non-main)
+    // Apple Container only supports directory mounts, not file mounts
+    const globalDir = path.join(GROUPS_DIR, 'global');
+    if (fs.existsSync(globalDir)) {
       mounts.push({
-        hostPath: globalClaudeMd,
-        containerPath: '/workspace/global/CLAUDE.md',
+        hostPath: globalDir,
+        containerPath: '/workspace/global',
         readonly: true
       });
     }
