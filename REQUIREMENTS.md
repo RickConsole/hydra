@@ -101,8 +101,7 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 
 ### Session Management
 - Each group maintains a conversation session (via Claude Agent SDK)
-- `/clear` command resets the session but keeps memory files
-- Old session IDs are archived to a file
+- Sessions auto-compact when context gets too long, preserving critical information
 
 ### Container Isolation
 - All agents run inside Apple Container (lightweight Linux VMs)

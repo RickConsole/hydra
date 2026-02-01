@@ -17,4 +17,3 @@ export const CONTAINER_TIMEOUT = parseInt(process.env.CONTAINER_TIMEOUT || '3000
 export const IPC_POLL_INTERVAL = 1000; // Check IPC directories every second
 
 export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
-export const CLEAR_COMMAND = '/clear';

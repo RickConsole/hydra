@@ -13,10 +13,8 @@ import {
   ASSISTANT_NAME,
   POLL_INTERVAL,
   STORE_DIR,
-  GROUPS_DIR,
   DATA_DIR,
   TRIGGER_PATTERN,
-  CLEAR_COMMAND,
   MAIN_GROUP_FOLDER,
   IPC_POLL_INTERVAL
 } from './config.js';
@@ -80,22 +78,6 @@ async function processMessage(msg: NewMessage): Promise<void> {
   if (!group) return;
 
   const content = msg.content.trim();
-
-  if (content.toLowerCase() === CLEAR_COMMAND) {
-    if (sessions[group.folder]) {
-      const archived = loadJson<Record<string, Array<{ session_id: string; cleared_at: string }>>>(
-        path.join(DATA_DIR, 'archived_sessions.json'), {}
-      );
-      if (!archived[group.folder]) archived[group.folder] = [];
-      archived[group.folder].push({ session_id: sessions[group.folder], cleared_at: new Date().toISOString() });
-      saveJson(path.join(DATA_DIR, 'archived_sessions.json'), archived);
-      delete sessions[group.folder];
-      saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
-    }
-    logger.info({ group: group.name }, 'Session cleared');
-    await sendMessage(msg.chat_jid, `${ASSISTANT_NAME}: Conversation cleared. Starting fresh!`);
-    return;
-  }
 
   if (!TRIGGER_PATTERN.test(content)) return;
 

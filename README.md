@@ -56,11 +56,6 @@ Talk to your assistant with the trigger word (default: `@Andy`):
 @Andy every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
 ```
 
-Clear conversation context:
-```
-/clear
-```
-
 From the main channel (your self-chat), you can manage groups and tasks:
 ```
 @Andy list all scheduled tasks across groups
@@ -103,6 +98,9 @@ Skills we'd love to see:
 
 **Platform Support**
 - `/setup-windows` - Windows via WSL2 + Docker
+
+**Session Management**
+- `/add-clear` - Add a `/clear` command that compacts the conversation (summarizes context while preserving critical information in the same session). Requires figuring out how to trigger compaction programmatically via the Claude Agent SDK.
 
 ## Requirements
 

@@ -73,7 +73,7 @@ Questions to ask:
 
 Implementation:
 1. Add command handling in `processMessage()` in `src/index.ts`
-2. Follow the pattern used for `/clear`
+2. Check for the command before the trigger pattern check
 
 ### Changing Deployment
 

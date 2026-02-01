@@ -142,7 +142,6 @@ nanoclaw/
 │
 ├── data/                          # Application state (gitignored)
 │   ├── sessions.json              # Active session IDs per group
-│   ├── archived_sessions.json     # Old sessions after /clear
 │   ├── registered_groups.json     # Group JID → folder mapping
 │   ├── router_state.json          # Last processed timestamp + last agent timestamps
 │   ├── env/env                    # Copy of .env for container mounting
@@ -182,7 +181,6 @@ export const CONTAINER_TIMEOUT = parseInt(process.env.CONTAINER_TIMEOUT || '3000
 export const IPC_POLL_INTERVAL = 1000;
 
 export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
-export const CLEAR_COMMAND = '/clear';
 ```
 
 **Note:** Paths must be absolute for Apple Container volume mounts to work correctly.
@@ -305,15 +303,6 @@ Sessions enable conversation continuity - Claude remembers what you talked about
 }
 ```
 
-### The /clear Command
-
-When a user sends `/clear` in any group:
-
-1. Current session ID is moved to `data/archived_sessions.json`
-2. Session ID is removed from `data/sessions.json`
-3. Next message starts a fresh session
-4. **Memory files are NOT deleted** - only the session resets
-
 ---
 
 ## Message Flow
@@ -335,8 +324,7 @@ When a user sends `/clear` in any group:
    ▼
 5. Router checks:
    ├── Is chat_jid in registered_groups.json? → No: ignore
-   ├── Does message start with @Assistant? → No: ignore
-   └── Is message "/clear"? → Yes: handle specially
+   └── Does message start with @Assistant? → No: ignore
    │
    ▼
 6. Router catches up conversation:
@@ -370,7 +358,6 @@ Messages must start with the trigger pattern (default: `@Andy`):
 - `@andy help me` → ✅ Triggers (case insensitive)
 - `Hey @Andy` → ❌ Ignored (trigger not at start)
 - `What's up?` → ❌ Ignored (no trigger)
-- `/clear` → ✅ Special command (no trigger needed)
 
 ### Conversation Catch-Up
 
@@ -393,7 +380,6 @@ This allows the agent to understand the conversation context even if it wasn't m
 | Command | Example | Effect |
 |---------|---------|--------|
 | `@Assistant [message]` | `@Andy what's the weather?` | Talk to Claude |
-| `/clear` | `/clear` | Reset session, keep memory |
 
 ### Commands Available in Main Channel Only
 
