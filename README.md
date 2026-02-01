@@ -1,70 +1,160 @@
 # NanoClaw
 
-Personal Claude assistant via WhatsApp.
+A personal Claude assistant. Lightweight, secure, and built to be understood and customized for your own needs.
+
+## Why This Exists
+
+This is the anti-[OpenClaw](https://github.com/anthropics/openclaw). That project became a monstrosity - multiple processes, endless configuration, endless integrations, security nightmares with leaky permission systems. It's impossible for anyone to actually understand the whole thing.
+
+NanoClaw gives you the same core functionality in a codebase you can read in an afternoon. One Node.js process. A handful of files. Agents run in actual containers, not behind leaky application-level permissions.
+
+## Philosophy
+
+**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers.
+
+**Secure by isolation.** Agents run in Linux containers (Apple Container). They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your Mac.
+
+**Built for one user.** This isn't a framework. It's working software for my needs - WhatsApp and Email. You fork it and make it yours.
+
+**Customization = code changes.** No configuration sprawl. Want different behavior? Modify the code. The codebase is small enough that this is safe.
+
+**AI-native.** No installation wizard - Claude Code guides setup. No monitoring dashboard - ask Claude what's happening. No debugging tools - describe the problem, Claude fixes it.
+
+**Skills over features.** Contributors don't add "Telegram alongside WhatsApp." They contribute skills like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
+
+**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters - a bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is the best harness available. OpenClaw runs on Pi; this runs the real thing.
+
+**No ToS gray areas.** Because it uses Claude Agent SDK natively with no hacks or workarounds, using your subscription with your auth token is completely legitimate. No risk of being shut down for terms of service violations (I am not a lawyer).
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourname/nanoclaw.git
+git clone https://github.com/anthropics/nanoclaw.git
 cd nanoclaw
 claude
-# Run: /setup
 ```
 
-Claude Code handles installation, authentication, and service setup.
+Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
 
-## Features
+That's it. No manual configuration files to edit.
 
-- **WhatsApp I/O**: Message Claude from your phone
-- **Persistent memory**: Per-group conversation context
-- **Global memory**: Shared context across all groups
-- **Email tools**: Read/send via Gmail (optional)
-- **Scheduled tasks**: Recurring reminders and jobs
-- **Web access**: Search and fetch content
+## What You Get
+
+- **WhatsApp I/O** - Message Claude from your phone
+- **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted
+- **Main channel** - Your private channel (self-chat) for admin control; every other group is completely isolated
+- **Email** - Read and send via Gmail (optional)
+- **Scheduled tasks** - Recurring jobs that run Claude and can message you back
+- **Web access** - Search and fetch content
+- **Container isolation** - Agents sandboxed in Linux VMs
 
 ## Usage
 
+Talk to your assistant with the trigger word (default: `@Andy`):
+
 ```
-@Andy what's the weather in NYC?
-@Andy summarize my unread emails
-@Andy remind me every Monday at 9am to check metrics
+@Andy give me an overview of the sales pipeline
+@Andy review the git history for the past week and update CLAUDE.md with anything notable
+@Andy research recent developments in AI agents and write a summary to research/ai-agents.md
+@Andy every Monday at 8am, compile news from Hacker News and TechCrunch and message me a briefing
+```
+
+Clear conversation context:
+```
 /clear
 ```
 
-From main channel:
+From the main channel (your self-chat), you can manage groups and tasks:
 ```
-@Andy add group "Family Chat"
-@Andy list groups
-```
-
-## Requirements
-
-- macOS (or Linux)
-- Node.js 18+
-- Claude Code CLI (authenticated)
-
-## Manual Setup
-
-```bash
-npm install
-npm run build
-npm start
+@Andy list all scheduled tasks across groups
+@Andy pause the Monday briefing task
 ```
 
 ## Customization
 
-Run Claude Code and ask to:
-- "Change trigger to @Bot"
-- "Make responses more concise"
+There are no configuration files to learn. Just tell Claude Code what you want:
 
-Or use `/customize`.
+- "Change the trigger word to @Bot"
+- "Make responses shorter and more direct"
+- "Add a custom greeting when I say good morning"
+- "Store conversation summaries weekly"
+
+Or run `/customize` for guided changes.
+
+The codebase is small enough that Claude can safely modify it. You're not configuring a black box - you're shaping code you can read.
+
+## Contributing
+
+**Don't add features. Add skills.**
+
+If you want to add Telegram support, don't create a PR that adds Telegram alongside WhatsApp. Instead, contribute a skill file (`.claude/skills/add-telegram/SKILL.md`) that teaches Claude Code how to transform a NanoClaw installation to use Telegram.
+
+Users then run `/add-telegram` on their fork and get clean code that does exactly what they need - not a bloated system trying to support every use case.
+
+### RFS (Request for Skills)
+
+Skills we'd love to see:
+
+**Communication Channels**
+- `/add-telegram` - Add Telegram as input
+- `/add-slack` - Add Slack as input
+- `/add-discord` - Add Discord as input
+- `/convert-to-telegram` - Replace WhatsApp entirely
+
+**Container Runtime**
+- `/convert-to-docker` - Replace Apple Container with Docker (unlocks Linux)
+
+**Platform Support**
+- `/setup-linux` - Full Linux support (depends on Docker)
+- `/setup-windows` - Windows via WSL2 + Docker
+
+## Requirements
+
+- macOS Tahoe (26) or later - runs great on Mac Mini
+- Node.js 20+
+- [Claude Code](https://claude.ai/download)
+- [Apple Container](https://github.com/apple/container)
 
 ## Architecture
 
-Single Node.js process using:
-- `@whiskeysockets/baileys` - WhatsApp Web API
-- `@anthropic-ai/claude-agent-sdk` - Claude Agent SDK
-- `better-sqlite3` - Message storage
+```
+WhatsApp (baileys) --> SQLite --> Polling loop --> Container (Claude Agent SDK) --> Response
+```
+
+Single Node.js process. Agents execute in isolated Linux containers with mounted directories. IPC via filesystem. No daemons, no queues, no complexity.
+
+Key files:
+- `src/index.ts` - Main app: WhatsApp connection, routing, IPC
+- `src/container-runner.ts` - Spawns agent containers
+- `src/scheduler.ts` - Runs scheduled tasks
+- `src/db.ts` - SQLite operations
+- `groups/*/CLAUDE.md` - Per-group memory
+
+## FAQ
+
+**Why WhatsApp and not Telegram/Signal/etc?**
+
+Because I use WhatsApp. Fork it and run a skill to change it. That's the whole point.
+
+**Why Apple Container instead of Docker?**
+
+Lightweight, fast, and built into macOS. Requires macOS Tahoe - runs great on a Mac Mini. Contribute a skill to convert to Docker if you want Docker.
+
+**Can I run this on Linux?**
+
+Yes. Run Claude Code and say "make this run on Linux." Half an hour of back-and-forth and it'll work. When you're done, ask Claude to create a skill explaining how to make it work on Linux, then contribute the skill back to the project.
+
+**Is this secure?**
+
+More secure than OpenClaw. Agents run in actual Linux VMs, not behind application-level permission checks. They can only access explicitly mounted directories. But you should still review what you're running - the codebase is small enough to read.
+
+**Why no configuration files?**
+
+We don't want configuration sprawl. It's a small codebase - make it match your exact needs. Every user should customize it to what they want rather than configuring a generic system. If you like having config files, tell Claude to add them.
+
+**How do I debug issues?**
+
+Ask Claude Code. "Why isn't the scheduler running?" "What's in the recent logs?" "Why did this message not get a response?" That's the AI-native approach.
 
 ## License
 

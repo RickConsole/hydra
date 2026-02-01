@@ -4,6 +4,67 @@ Original requirements and design decisions from the project creator.
 
 ---
 
+## Why This Exists
+
+This is a lightweight, secure alternative to OpenClaw (formerly ClawBot). That project became a monstrosity - 4-5 different processes running different gateways, endless configuration files, endless integrations. It's a security nightmare where agents don't run in isolated processes; there's all kinds of leaky workarounds trying to prevent them from accessing parts of the system they shouldn't. It's impossible for anyone to realistically understand the whole codebase. When you run it you're kind of just yoloing it.
+
+NanoClaw gives you the core functionality without that mess.
+
+---
+
+## Philosophy
+
+### Small Enough to Understand
+
+The entire codebase should be something you can read and understand. One Node.js process. A handful of source files. No microservices, no message queues, no abstraction layers.
+
+### Security Through True Isolation
+
+Instead of application-level permission systems trying to prevent agents from accessing things, agents run in actual Linux containers (Apple Container). The isolation is at the OS level. Agents can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your Mac.
+
+### Built for One User
+
+This isn't a framework or a platform. It's working software for my specific needs. I use WhatsApp and Email, so it supports WhatsApp and Email. I don't use Telegram, so it doesn't support Telegram. I add the integrations I actually want, not every possible integration.
+
+### Customization = Code Changes
+
+No configuration sprawl. If you want different behavior, modify the code. The codebase is small enough that this is safe and practical. Very minimal things like the trigger word are in config. Everything else - just change the code to do what you want.
+
+### AI-Native Development
+
+I don't need an installation wizard - Claude Code guides the setup. I don't need a monitoring dashboard - I ask Claude Code what's happening. I don't need elaborate logging UIs - I ask Claude to read the logs. I don't need debugging tools - I describe the problem and Claude fixes it.
+
+The codebase assumes you have an AI collaborator. It doesn't need to be excessively self-documenting or self-debugging because Claude is always there.
+
+### Skills Over Features
+
+When people contribute, they shouldn't add "Telegram support alongside WhatsApp." They should contribute a skill like `/add-telegram` that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need - not a bloated system trying to support everyone's use case simultaneously.
+
+---
+
+## RFS (Request for Skills)
+
+Skills we'd love contributors to build:
+
+### Communication Channels
+Skills to add or switch to different messaging platforms:
+- `/add-telegram` - Add Telegram as an input channel
+- `/add-slack` - Add Slack as an input channel
+- `/add-discord` - Add Discord as an input channel
+- `/add-sms` - Add SMS via Twilio or similar
+- `/convert-to-telegram` - Replace WhatsApp with Telegram entirely
+
+### Container Runtime
+The project currently uses Apple Container (macOS-only). We need:
+- `/convert-to-docker` - Replace Apple Container with standard Docker
+- This unlocks Linux support and broader deployment options
+
+### Platform Support
+- `/setup-linux` - Make the full setup work on Linux (depends on Docker conversion)
+- `/setup-windows` - Windows support via WSL2 + Docker
+
+---
+
 ## Vision
 
 A personal Claude assistant accessible via WhatsApp, with minimal custom code.
@@ -17,7 +78,7 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - **Web access** for search and browsing
 - **Browser automation** via agent-browser
 
-**Design philosophy:**
+**Implementation approach:**
 - Leverage existing tools (WhatsApp connector, Claude Agent SDK, MCP servers)
 - Minimal glue code
 - File-based systems where possible (CLAUDE.md for memory, folders for groups)
