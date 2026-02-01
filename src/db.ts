@@ -175,8 +175,9 @@ export function updateTask(id: string, updates: Partial<Pick<ScheduledTask, 'pro
 }
 
 export function deleteTask(id: string): void {
-  db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(id);
+  // Delete child records first (FK constraint)
   db.prepare('DELETE FROM task_run_logs WHERE task_id = ?').run(id);
+  db.prepare('DELETE FROM scheduled_tasks WHERE id = ?').run(id);
 }
 
 export function getDueTasks(): ScheduledTask[] {
