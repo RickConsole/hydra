@@ -128,6 +128,11 @@ Ask the user:
 >
 > Messages starting with `@TriggerWord` will be sent to Claude.
 
+If they choose something other than `Andy`, update it in these places:
+1. `groups/CLAUDE.md` - Change "# Andy" and "You are Andy" to the new name
+2. `groups/main/CLAUDE.md` - Same changes at the top
+3. `data/registered_groups.json` - Use `@NewName` as the trigger when registering groups
+
 Store their choice - you'll use it when creating the registered_groups.json and when telling them how to test.
 
 ## 7. Register Main Channel

@@ -1,36 +1,40 @@
 # NanoClaw
 
-Personal Claude assistant via WhatsApp.
+Personal Claude assistant. See [README.md](README.md) for philosophy and setup. See [REQUIREMENTS.md](REQUIREMENTS.md) for architecture decisions.
 
-## Structure
+## Quick Context
 
-- `src/index.ts` - Main application (WhatsApp + routing + agent)
-- `package.json` - Dependencies and scripts
-- `.mcp.json` - MCP server configuration (gmail, scheduler)
-- `groups/CLAUDE.md` - Global memory
-- `groups/{name}/CLAUDE.md` - Per-group memory
+Single Node.js process that connects to WhatsApp, routes messages to Claude Agent SDK running in Apple Container (Linux VMs). Each group has isolated filesystem and memory.
 
-## Configuration
+## Key Files
 
-Set environment variable `ASSISTANT_NAME` to change the trigger (default: "Andy").
-
-Or edit the CONFIG object in `src/index.ts`.
+| File | Purpose |
+|------|---------|
+| `src/index.ts` | Main app: WhatsApp connection, message routing, IPC |
+| `src/config.ts` | Trigger pattern, paths, intervals |
+| `src/container-runner.ts` | Spawns agent containers with mounts |
+| `src/scheduler.ts` | Runs scheduled tasks |
+| `src/db.ts` | SQLite operations |
+| `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
 
 ## Skills
 
-- `/setup` - Install dependencies, authenticate, start services
-- `/customize` - Modify behavior
+| Skill | When to Use |
+|-------|-------------|
+| `/setup` | First-time installation, authentication, service configuration |
+| `/customize` | Adding channels, integrations, changing behavior |
+| `/debug` | Container issues, logs, troubleshooting |
 
-## Architecture
+## Development
 
+```bash
+npm run dev          # Run with hot reload
+npm run build        # Compile TypeScript
+./container/build.sh # Rebuild agent container
 ```
-WhatsApp (baileys) ─┬─> SQLite (messages.db)
-                    │           ↓
-                    │   Polling loop
-                    │           ↓
-                    │   Claude Agent SDK
-                    │           ↓
-                    └─< Send response
-```
 
-Single Node.js process handles everything.
+Service management:
+```bash
+launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+```
