@@ -37,7 +37,47 @@ container system start 2>/dev/null || true
 container --version
 ```
 
-## 3. Build Container Image
+## 3. Configure API Key
+
+Ask the user:
+> Do you have an Anthropic API key configured elsewhere that I should copy, or should I create a `.env` file for you to fill in?
+
+**If copying from another location:**
+```bash
+# Extract only the ANTHROPIC_API_KEY line from the source file
+grep "^ANTHROPIC_API_KEY=" /path/to/other/.env > .env
+```
+
+Verify the key exists (only show first/last few chars for security):
+```bash
+KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
+if [ -n "$KEY" ]; then
+  echo "API key configured: ${KEY:0:10}...${KEY: -4}"
+else
+  echo "API key missing or invalid"
+fi
+```
+
+**If creating new:**
+```bash
+echo 'ANTHROPIC_API_KEY=' > .env
+```
+
+Tell the user:
+> I've created `.env` in the project root. Please add your Anthropic API key after the `=` sign.
+> You can get an API key from https://console.anthropic.com/
+
+Wait for user confirmation, then verify (only show first/last few chars):
+```bash
+KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
+if [ -n "$KEY" ]; then
+  echo "API key configured: ${KEY:0:10}...${KEY: -4}"
+else
+  echo "API key missing or invalid"
+fi
+```
+
+## 4. Build Container Image
 
 Build the NanoClaw agent container:
 
@@ -45,15 +85,15 @@ Build the NanoClaw agent container:
 ./container/build.sh
 ```
 
-This creates the `nanoclaw-agent:latest` image with Node.js, Chromium, and agent-browser.
+This creates the `nanoclaw-agent:latest` image with Node.js, Chromium, Claude Code CLI, and agent-browser.
 
-Verify the image was created:
+Verify the build succeeded (the `container images` command may not work due to a plugin issue, so we verify by running a simple test):
 
 ```bash
-container images | grep nanoclaw-agent || echo "Image not found"
+echo '{}' | container run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
 ```
 
-## 4. WhatsApp Authentication
+## 5. WhatsApp Authentication
 
 **USER ACTION REQUIRED**
 
@@ -73,7 +113,7 @@ Wait for the script to output "Successfully authenticated" then continue.
 
 If it says "Already authenticated", skip to the next step.
 
-## 5. Configure Assistant Name
+## 6. Configure Assistant Name
 
 Ask the user:
 > What trigger word do you want to use? (default: `Andy`)
@@ -82,7 +122,7 @@ Ask the user:
 
 Store their choice - you'll use it when creating the registered_groups.json and when telling them how to test.
 
-## 6. Register Main Channel
+## 7. Register Main Channel
 
 Ask the user:
 > Do you want to use your **personal chat** (message yourself) or a **WhatsApp group** as your main control channel?
@@ -126,7 +166,7 @@ Ensure the groups folder exists:
 mkdir -p groups/main/logs
 ```
 
-## 7. Gmail Authentication (Optional)
+## 8. Gmail Authentication (Optional)
 
 Ask the user:
 > Do you want to enable Gmail integration for reading/sending emails?
@@ -153,7 +193,7 @@ npx -y @gongrzhe/server-gmail-autoauth-mcp
 
 This will open a browser for OAuth consent. After authorization, credentials are cached.
 
-## 8. Configure launchd Service
+## 9. Configure launchd Service
 
 Get the actual paths:
 
@@ -212,7 +252,7 @@ Verify it's running:
 launchctl list | grep nanoclaw
 ```
 
-## 9. Test
+## 10. Test
 
 Tell the user (using the assistant name they configured):
 > Send `@ASSISTANT_NAME hello` in your registered chat.

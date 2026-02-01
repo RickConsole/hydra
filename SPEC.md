@@ -54,7 +54,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 │  │  Volume mounts:                                                │   │
 │  │    • groups/{name}/ → /workspace/group                         │   │
 │  │    • groups/CLAUDE.md → /workspace/global/CLAUDE.md            │   │
-│  │    • ~/.claude/ → /root/.claude/ (sessions)                    │   │
+│  │    • ~/.claude/ → /home/node/.claude/ (sessions)               │   │
 │  │    • Additional dirs → /workspace/extra/*                      │   │
 │  │                                                                │   │
 │  │  Tools (all groups):                                           │   │
@@ -76,7 +76,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 | WhatsApp Connection | Node.js (@whiskeysockets/baileys) | Connect to WhatsApp, send/receive messages |
 | Message Storage | SQLite (better-sqlite3) | Store messages for polling |
 | Container Runtime | Apple Container | Isolated Linux VMs for agent execution |
-| Agent | @anthropic-ai/claude-agent-sdk | Run Claude with tools and MCP servers |
+| Agent | @anthropic-ai/claude-agent-sdk (0.2.29) | Run Claude with tools and MCP servers |
 | Browser Automation | agent-browser + Chromium | Web interaction and screenshots |
 | Runtime | Node.js 22+ | Host process for routing and scheduling |
 
@@ -104,7 +104,7 @@ nanoclaw/
 │   └── container-runner.ts        # Spawns agents in Apple Containers
 │
 ├── container/
-│   ├── Dockerfile                 # Container image definition
+│   ├── Dockerfile                 # Container image (runs as 'node' user, includes Claude Code CLI)
 │   ├── build.sh                   # Build script for container image
 │   ├── agent-runner/              # Code that runs inside the container
 │   │   ├── package.json
@@ -121,8 +121,10 @@ nanoclaw/
 │   └── skills/
 │       ├── setup/
 │       │   └── SKILL.md           # /setup skill
-│       └── customize/
-│           └── SKILL.md           # /customize skill
+│       ├── customize/
+│       │   └── SKILL.md           # /customize skill
+│       └── debug/
+│           └── SKILL.md           # /debug skill (container debugging)
 │
 ├── groups/
 │   ├── CLAUDE.md                  # Global memory (all groups read this)
@@ -142,11 +144,14 @@ nanoclaw/
 │   ├── sessions.json              # Active session IDs per group
 │   ├── archived_sessions.json     # Old sessions after /clear
 │   ├── registered_groups.json     # Group JID → folder mapping
-│   └── router_state.json          # Last processed timestamp + last agent timestamps
+│   ├── router_state.json          # Last processed timestamp + last agent timestamps
+│   ├── env/env                    # Copy of .env for container mounting
+│   └── ipc/                       # Container IPC (messages/, tasks/)
 │
 ├── logs/                          # Runtime logs (gitignored)
-│   ├── nanoclaw.log               # stdout
-│   └── nanoclaw.error.log         # stderr
+│   ├── nanoclaw.log               # Host stdout
+│   └── nanoclaw.error.log         # Host stderr
+│   # Note: Per-container logs are in groups/{folder}/logs/container-*.log
 │
 └── launchd/
     └── com.nanoclaw.plist         # macOS service configuration
@@ -201,6 +206,18 @@ Groups can have additional directories mounted via `containerConfig` in `data/re
 ```
 
 Additional mounts appear at `/workspace/extra/{containerPath}` inside the container.
+
+**Apple Container mount syntax note:** Read-write mounts use `-v host:container`, but readonly mounts require `--mount "type=bind,source=...,target=...,readonly"` (the `:ro` suffix doesn't work).
+
+### API Key Configuration
+
+The Anthropic API key must be in a `.env` file in the project root:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+This file is automatically mounted into the container at `/workspace/env-dir/env` and sourced by the entrypoint script. This workaround is needed because Apple Container loses `-e` environment variables when using `-i` (interactive mode with piped stdin).
 
 ### Changing the Assistant Name
 
@@ -540,6 +557,7 @@ All agents run inside Apple Container (lightweight Linux VMs), providing:
 - **Safe Bash access**: Commands run inside the container, not on your Mac
 - **Network isolation**: Can be configured per-container if needed
 - **Process isolation**: Container processes can't affect the host
+- **Non-root user**: Container runs as unprivileged `node` user (uid 1000)
 
 ### Prompt Injection Risk
 
@@ -563,7 +581,7 @@ WhatsApp messages could contain malicious instructions attempting to manipulate 
 
 | Credential | Storage Location | Notes |
 |------------|------------------|-------|
-| Claude CLI Auth | ~/.claude/ | Managed by Claude Code CLI |
+| Claude CLI Auth | ~/.claude/ | Mounted to /home/node/.claude/ in container |
 | WhatsApp Session | store/auth/ | Auto-created, persists ~20 days |
 | Gmail OAuth Tokens | ~/.gmail-mcp/ | Created during setup (optional) |
 

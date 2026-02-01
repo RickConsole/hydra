@@ -109,6 +109,20 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     readonly: false
   });
 
+  // Environment file directory (workaround for Apple Container -i env var bug)
+  const envDir = path.join(DATA_DIR, 'env');
+  fs.mkdirSync(envDir, { recursive: true });
+  const envFile = path.join(projectRoot, '.env');
+  if (fs.existsSync(envFile)) {
+    // Copy .env to the env directory as a plain file called 'env'
+    fs.copyFileSync(envFile, path.join(envDir, 'env'));
+    mounts.push({
+      hostPath: envDir,
+      containerPath: '/workspace/env-dir',
+      readonly: true
+    });
+  }
+
   // Additional mounts from group config
   if (group.containerConfig?.additionalMounts) {
     for (const mount of group.containerConfig.additionalMounts) {
@@ -136,9 +150,13 @@ function buildContainerArgs(mounts: VolumeMount[]): string[] {
   const args: string[] = ['run', '-i', '--rm'];
 
   // Add volume mounts
+  // Apple Container: use --mount for readonly, -v for read-write
   for (const mount of mounts) {
-    const mode = mount.readonly ? ':ro' : '';
-    args.push('-v', `${mount.hostPath}:${mount.containerPath}${mode}`);
+    if (mount.readonly) {
+      args.push('--mount', `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`);
+    } else {
+      args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
+    }
   }
 
   // Add the image name
@@ -161,11 +179,22 @@ export async function runContainerAgent(
   const mounts = buildVolumeMounts(group, input.isMain);
   const containerArgs = buildContainerArgs(mounts);
 
+  // Log detailed mount info at debug level
+  logger.debug({
+    group: group.name,
+    mounts: mounts.map(m => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`),
+    containerArgs: containerArgs.join(' ')
+  }, 'Container mount configuration');
+
   logger.info({
     group: group.name,
     mountCount: mounts.length,
     isMain: input.isMain
   }, 'Spawning container agent');
+
+  // Create logs directory for this group
+  const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
 
   return new Promise((resolve) => {
     const container = spawn('container', containerArgs, {
@@ -207,12 +236,42 @@ export async function runContainerAgent(
       clearTimeout(timeout);
       const duration = Date.now() - startTime;
 
+      // Always write stderr to log file for debugging
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const logFile = path.join(logsDir, `container-${timestamp}.log`);
+      const logContent = [
+        `=== Container Run Log ===`,
+        `Timestamp: ${new Date().toISOString()}`,
+        `Group: ${group.name}`,
+        `IsMain: ${input.isMain}`,
+        `Duration: ${duration}ms`,
+        `Exit Code: ${code}`,
+        ``,
+        `=== Input ===`,
+        JSON.stringify(input, null, 2),
+        ``,
+        `=== Container Args ===`,
+        containerArgs.join(' '),
+        ``,
+        `=== Mounts ===`,
+        mounts.map(m => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`).join('\n'),
+        ``,
+        `=== Stderr ===`,
+        stderr,
+        ``,
+        `=== Stdout ===`,
+        stdout
+      ].join('\n');
+      fs.writeFileSync(logFile, logContent);
+      logger.debug({ logFile }, 'Container log written');
+
       if (code !== 0) {
         logger.error({
           group: group.name,
           code,
           duration,
-          stderr: stderr.slice(-500)
+          stderr: stderr.slice(-500),
+          logFile
         }, 'Container exited with error');
 
         resolve({

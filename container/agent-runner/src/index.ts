@@ -83,6 +83,7 @@ async function main(): Promise<void> {
           'mcp__gmail__*'
         ],
         permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
         settingSources: ['project'],
         mcpServers: {
           nanoclaw: ipcMcp,
