@@ -81,11 +81,10 @@ async function processMessage(msg: NewMessage): Promise<void> {
 
   if (!TRIGGER_PATTERN.test(content)) return;
 
-  // Get messages since last agent interaction to catch up the session
+  // Get all messages since last agent interaction so the session has full context
   const sinceTimestamp = lastAgentTimestamp[msg.chat_jid] || '';
   const missedMessages = getMessagesSince(msg.chat_jid, sinceTimestamp);
 
-  // Build prompt with conversation history
   const lines = missedMessages.map(m => {
     const d = new Date(m.timestamp);
     const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -102,7 +101,6 @@ async function processMessage(msg: NewMessage): Promise<void> {
   const response = await runAgent(group, prompt, msg.chat_jid);
   await setTyping(msg.chat_jid, false);
 
-  // Update last agent timestamp
   lastAgentTimestamp[msg.chat_jid] = msg.timestamp;
 
   if (response) {
@@ -135,7 +133,6 @@ async function runAgent(group: RegisteredGroup, prompt: string, chatJid: string)
       isMain
     });
 
-    // Update session if changed
     if (output.newSessionId) {
       sessions[group.folder] = output.newSessionId;
       saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
@@ -162,7 +159,6 @@ async function sendMessage(jid: string, text: string): Promise<void> {
   }
 }
 
-// IPC watcher for container messages and tasks
 function startIpcWatcher(): void {
   const messagesDir = path.join(DATA_DIR, 'ipc', 'messages');
   const tasksDir = path.join(DATA_DIR, 'ipc', 'tasks');
@@ -171,7 +167,6 @@ function startIpcWatcher(): void {
   fs.mkdirSync(tasksDir, { recursive: true });
 
   const processIpcFiles = async () => {
-    // Process pending messages
     try {
       const messageFiles = fs.readdirSync(messagesDir).filter(f => f.endsWith('.json'));
       for (const file of messageFiles) {
@@ -195,7 +190,6 @@ function startIpcWatcher(): void {
       logger.error({ err }, 'Error reading IPC messages directory');
     }
 
-    // Process pending task operations
     try {
       const taskFiles = fs.readdirSync(tasksDir).filter(f => f.endsWith('.json'));
       for (const file of taskFiles) {
@@ -241,7 +235,6 @@ async function processTaskIpc(data: {
       if (data.prompt && data.schedule_type && data.schedule_value && data.groupFolder && data.chatJid) {
         const scheduleType = data.schedule_type as 'cron' | 'interval' | 'once';
 
-        // Calculate next run time
         let nextRun: string | null = null;
         if (scheduleType === 'cron') {
           const interval = CronExpressionParser.parse(data.schedule_value);
@@ -395,11 +388,9 @@ async function startMessageLoop(): Promise<void> {
 
 function ensureContainerSystemRunning(): void {
   try {
-    // Check if container system is already running
     execSync('container system status', { stdio: 'pipe' });
     logger.debug('Apple Container system already running');
   } catch {
-    // Not running, try to start it
     logger.info('Starting Apple Container system...');
     try {
       execSync('container system start', { stdio: 'pipe', timeout: 30000 });

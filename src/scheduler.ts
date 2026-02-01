@@ -24,7 +24,6 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
 
   logger.info({ taskId: task.id, group: task.group_folder }, 'Running scheduled task');
 
-  // Find the group config for this task
   const groups = deps.registeredGroups();
   const group = Object.values(groups).find(g => g.folder === task.group_folder);
 
@@ -78,7 +77,6 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
 
   const durationMs = Date.now() - startTime;
 
-  // Log the run
   logTaskRun({
     task_id: task.id,
     run_at: new Date().toISOString(),
@@ -88,7 +86,6 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
     error
   });
 
-  // Calculate next run
   let nextRun: string | null = null;
   if (task.schedule_type === 'cron') {
     const interval = CronExpressionParser.parse(task.schedule_value);
@@ -97,9 +94,8 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
     const ms = parseInt(task.schedule_value, 10);
     nextRun = new Date(Date.now() + ms).toISOString();
   }
-  // 'once' tasks don't have a next run
+  // 'once' tasks have no next run
 
-  // Update task
   const resultSummary = error ? `Error: ${error}` : (result ? result.slice(0, 200) : 'Completed');
   updateTaskAfterRun(task.id, nextRun, resultSummary);
 }

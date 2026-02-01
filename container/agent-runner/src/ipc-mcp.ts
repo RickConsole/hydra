@@ -19,14 +19,12 @@ export interface IpcMcpContext {
 }
 
 function writeIpcFile(dir: string, data: object): string {
-  // Ensure directory exists
   fs.mkdirSync(dir, { recursive: true });
 
-  // Use timestamp + random suffix for unique filename
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
   const filepath = path.join(dir, filename);
 
-  // Write atomically: write to temp file, then rename
+  // Atomic write: temp file then rename
   const tempPath = `${filepath}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
   fs.renameSync(tempPath, filepath);
@@ -41,7 +39,6 @@ export function createIpcMcp(ctx: IpcMcpContext) {
     name: 'nanoclaw',
     version: '1.0.0',
     tools: [
-      // Send a message to the WhatsApp group
       tool(
         'send_message',
         'Send a message to the current WhatsApp group. Use this to proactively share information or updates.',
@@ -68,7 +65,6 @@ export function createIpcMcp(ctx: IpcMcpContext) {
         }
       ),
 
-      // Schedule a new task
       tool(
         'schedule_task',
         'Schedule a recurring or one-time task. The task will run as a full agent with access to all tools.',
@@ -104,13 +100,12 @@ export function createIpcMcp(ctx: IpcMcpContext) {
         }
       ),
 
-      // List tasks (reads from a mounted file that host keeps updated)
+      // Reads from current_tasks.json which host keeps updated
       tool(
         'list_tasks',
         'List all scheduled tasks. From main: shows all tasks. From other groups: shows only that group\'s tasks.',
         {},
         async () => {
-          // Host process writes current tasks to this file
           const tasksFile = path.join(IPC_DIR, 'current_tasks.json');
 
           try {
@@ -125,7 +120,6 @@ export function createIpcMcp(ctx: IpcMcpContext) {
 
             const allTasks = JSON.parse(fs.readFileSync(tasksFile, 'utf-8'));
 
-            // Filter to current group unless main
             const tasks = isMain
               ? allTasks
               : allTasks.filter((t: { groupFolder: string }) => t.groupFolder === groupFolder);
@@ -160,7 +154,6 @@ export function createIpcMcp(ctx: IpcMcpContext) {
         }
       ),
 
-      // Pause a task
       tool(
         'pause_task',
         'Pause a scheduled task. It will not run until resumed.',
@@ -187,7 +180,6 @@ export function createIpcMcp(ctx: IpcMcpContext) {
         }
       ),
 
-      // Resume a task
       tool(
         'resume_task',
         'Resume a paused task.',
@@ -214,7 +206,6 @@ export function createIpcMcp(ctx: IpcMcpContext) {
         }
       ),
 
-      // Cancel a task
       tool(
         'cancel_task',
         'Cancel and delete a scheduled task.',

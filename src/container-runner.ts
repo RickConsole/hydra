@@ -90,7 +90,6 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     });
   }
 
-  // Gmail MCP credentials
   const gmailDir = path.join(homeDir, '.gmail-mcp');
   if (fs.existsSync(gmailDir)) {
     mounts.push({
@@ -100,7 +99,6 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     });
   }
 
-  // IPC directory for messages and tasks
   const ipcDir = path.join(DATA_DIR, 'ipc');
   fs.mkdirSync(path.join(ipcDir, 'messages'), { recursive: true });
   fs.mkdirSync(path.join(ipcDir, 'tasks'), { recursive: true });
@@ -115,7 +113,6 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
   fs.mkdirSync(envDir, { recursive: true });
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
-    // Copy .env to the env directory as a plain file called 'env'
     fs.copyFileSync(envFile, path.join(envDir, 'env'));
     mounts.push({
       hostPath: envDir,
@@ -124,10 +121,8 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     });
   }
 
-  // Additional mounts from group config
   if (group.containerConfig?.additionalMounts) {
     for (const mount of group.containerConfig.additionalMounts) {
-      // Resolve home directory in path
       const hostPath = mount.hostPath.startsWith('~')
         ? path.join(homeDir, mount.hostPath.slice(1))
         : mount.hostPath;
@@ -150,8 +145,7 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
 function buildContainerArgs(mounts: VolumeMount[]): string[] {
   const args: string[] = ['run', '-i', '--rm'];
 
-  // Add volume mounts
-  // Apple Container: use --mount for readonly, -v for read-write
+  // Apple Container: --mount for readonly, -v for read-write
   for (const mount of mounts) {
     if (mount.readonly) {
       args.push('--mount', `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`);
@@ -160,7 +154,6 @@ function buildContainerArgs(mounts: VolumeMount[]): string[] {
     }
   }
 
-  // Add the image name
   args.push(CONTAINER_IMAGE);
 
   return args;
@@ -172,15 +165,12 @@ export async function runContainerAgent(
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
 
-  // Ensure group directory exists
   const groupDir = path.join(GROUPS_DIR, group.folder);
   fs.mkdirSync(groupDir, { recursive: true });
 
-  // Build volume mounts
   const mounts = buildVolumeMounts(group, input.isMain);
   const containerArgs = buildContainerArgs(mounts);
 
-  // Log detailed mount info at debug level
   logger.debug({
     group: group.name,
     mounts: mounts.map(m => `${m.hostPath} -> ${m.containerPath}${m.readonly ? ' (ro)' : ''}`),
@@ -193,7 +183,6 @@ export async function runContainerAgent(
     isMain: input.isMain
   }, 'Spawning container agent');
 
-  // Create logs directory for this group
   const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
   fs.mkdirSync(logsDir, { recursive: true });
 
@@ -205,7 +194,6 @@ export async function runContainerAgent(
     let stdout = '';
     let stderr = '';
 
-    // Send input JSON to container stdin
     container.stdin.write(JSON.stringify(input));
     container.stdin.end();
 
@@ -215,14 +203,12 @@ export async function runContainerAgent(
 
     container.stderr.on('data', (data) => {
       stderr += data.toString();
-      // Log container stderr in real-time
       const lines = data.toString().trim().split('\n');
       for (const line of lines) {
         if (line) logger.debug({ container: group.folder }, line);
       }
     });
 
-    // Timeout handler
     const timeout = setTimeout(() => {
       logger.error({ group: group.name }, 'Container timeout, killing');
       container.kill('SIGKILL');
@@ -237,12 +223,10 @@ export async function runContainerAgent(
       clearTimeout(timeout);
       const duration = Date.now() - startTime;
 
-      // Write container log file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const logFile = path.join(logsDir, `container-${timestamp}.log`);
       const isVerbose = process.env.LOG_LEVEL === 'debug' || process.env.LOG_LEVEL === 'trace';
 
-      // Build log content - only include full input/output in verbose mode
       const logLines = [
         `=== Container Run Log ===`,
         `Timestamp: ${new Date().toISOString()}`,
@@ -254,7 +238,6 @@ export async function runContainerAgent(
       ];
 
       if (isVerbose) {
-        // Full content logging only in debug/trace mode
         logLines.push(
           `=== Input ===`,
           JSON.stringify(input, null, 2),
@@ -272,7 +255,6 @@ export async function runContainerAgent(
           stdout
         );
       } else {
-        // Minimal logging by default - no message content
         logLines.push(
           `=== Input Summary ===`,
           `Prompt length: ${input.prompt.length} chars`,
@@ -283,7 +265,6 @@ export async function runContainerAgent(
           ``
         );
 
-        // Only include stderr/stdout if there was an error
         if (code !== 0) {
           logLines.push(
             `=== Stderr (last 500 chars) ===`,
@@ -313,9 +294,8 @@ export async function runContainerAgent(
         return;
       }
 
-      // Parse JSON output from stdout
       try {
-        // Find the JSON line (last non-empty line should be the output)
+        // Last non-empty line is the JSON output
         const lines = stdout.trim().split('\n');
         const jsonLine = lines[lines.length - 1];
         const output: ContainerOutput = JSON.parse(jsonLine);
@@ -355,7 +335,6 @@ export async function runContainerAgent(
   });
 }
 
-// Export task snapshot for container IPC
 export function writeTasksSnapshot(tasks: Array<{
   id: string;
   groupFolder: string;

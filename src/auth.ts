@@ -28,7 +28,6 @@ async function authenticate(): Promise<void> {
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
-  // Check if already authenticated
   if (state.creds.registered) {
     console.log('✓ Already authenticated with WhatsApp');
     console.log('  To re-authenticate, delete the store/auth folder and run again.');

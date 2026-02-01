@@ -52,11 +52,8 @@ function log(message: string): void {
   console.error(`[agent-runner] ${message}`);
 }
 
-/**
- * Find session summary from sessions-index.json
- */
 function getSessionSummary(sessionId: string, transcriptPath: string): string | null {
-  // The sessions-index.json is in the same directory as the transcript
+  // sessions-index.json is in the same directory as the transcript
   const projectDir = path.dirname(transcriptPath);
   const indexPath = path.join(projectDir, 'sessions-index.json');
 
@@ -101,7 +98,6 @@ function createPreCompactHook(): HookCallback {
         return {};
       }
 
-      // Get summary from sessions-index.json for the filename
       const summary = getSessionSummary(sessionId, transcriptPath);
       const name = summary ? sanitizeFilename(summary) : generateFallbackName();
 
@@ -124,9 +120,6 @@ function createPreCompactHook(): HookCallback {
   };
 }
 
-/**
- * Sanitize a summary string into a valid filename.
- */
 function sanitizeFilename(summary: string): string {
   return summary
     .toLowerCase()
@@ -165,7 +158,6 @@ function parseTranscript(content: string): ParsedMessage[] {
         if (text) messages.push({ role: 'assistant', content: text });
       }
     } catch {
-      // Skip malformed lines
     }
   }
 

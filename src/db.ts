@@ -129,8 +129,6 @@ export function getMessagesSince(chatJid: string, sinceTimestamp: string): NewMe
   return db.prepare(sql).all(chatJid, sinceTimestamp) as NewMessage[];
 }
 
-// Scheduled Tasks
-
 export function createTask(task: Omit<ScheduledTask, 'last_run' | 'last_result'>): void {
   db.prepare(`
     INSERT INTO scheduled_tasks (id, group_folder, chat_jid, prompt, schedule_type, schedule_value, next_run, status, created_at)
