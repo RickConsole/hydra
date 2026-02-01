@@ -96,25 +96,15 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     }
   }
 
-  // Claude sessions directory (for session persistence)
-  // Container runs as 'node' user with HOME=/home/node
-  const claudeDir = path.join(homeDir, '.claude');
-  if (fs.existsSync(claudeDir)) {
-    mounts.push({
-      hostPath: claudeDir,
-      containerPath: '/home/node/.claude',
-      readonly: false
-    });
-  }
-
-  const gmailDir = path.join(homeDir, '.gmail-mcp');
-  if (fs.existsSync(gmailDir)) {
-    mounts.push({
-      hostPath: gmailDir,
-      containerPath: '/home/node/.gmail-mcp',
-      readonly: false
-    });
-  }
+  // Per-group Claude sessions directory (isolated from other groups)
+  // Each group gets their own .claude/ to prevent cross-group session access
+  const groupSessionsDir = path.join(DATA_DIR, 'sessions', group.folder, '.claude');
+  fs.mkdirSync(groupSessionsDir, { recursive: true });
+  mounts.push({
+    hostPath: groupSessionsDir,
+    containerPath: '/home/node/.claude',
+    readonly: false
+  });
 
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC

@@ -142,10 +142,6 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - Messages stored in SQLite, polled by router
 - QR code authentication during setup
 
-### Email (Gmail)
-- Read-only MCP integration (can read and send, but not an I/O channel)
-- Optional, enabled during setup
-
 ### Scheduler
 - Built-in scheduler runs on the host, spawns containers for task execution
 - Custom `nanoclaw` MCP server (inside container) provides scheduling tools
@@ -175,7 +171,7 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - Each user gets a custom setup matching their exact needs
 
 ### Skills
-- `/setup` - Install dependencies, authenticate WhatsApp/Gmail, configure scheduler, start services
+- `/setup` - Install dependencies, authenticate WhatsApp, configure scheduler, start services
 - `/customize` - General-purpose skill for adding capabilities (new channels like Telegram, new integrations, behavior changes)
 
 ### Deployment
@@ -191,7 +187,6 @@ These are the creator's settings, stored here for reference:
 - **Trigger**: `@Andy` (case insensitive)
 - **Response prefix**: `Andy:`
 - **Persona**: Default Claude (no custom personality)
-- **Gmail**: Enabled
 - **Main channel**: Self-chat (messaging yourself in WhatsApp)
 
 ---

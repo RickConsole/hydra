@@ -45,10 +45,10 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - **WhatsApp I/O** - Message Claude from your phone
 - **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted
 - **Main channel** - Your private channel (self-chat) for admin control; every other group is completely isolated
-- **Email** - Read and send via Gmail (optional)
 - **Scheduled tasks** - Recurring jobs that run Claude and can message you back
 - **Web access** - Search and fetch content
 - **Container isolation** - Agents sandboxed in Apple containers
+- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
 ## Usage
 
@@ -144,7 +144,7 @@ Yes. Run Claude Code and say "make this run on Linux." ~30 min of back-and-forth
 
 **Is this secure?**
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running, but the codebase is small enough that you actually can.
+Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running, but the codebase is small enough that you actually can. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
 
 **Why no configuration files?**
 

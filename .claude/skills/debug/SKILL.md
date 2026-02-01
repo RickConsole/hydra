@@ -19,8 +19,8 @@ src/container-runner.ts               container/agent-runner/
     │                                      │
     ├── data/env/env ──────────────> /workspace/env-dir/env
     ├── groups/{folder} ───────────> /workspace/group
-    ├── data/ipc ──────────────────> /workspace/ipc
-    ├── ~/.claude/ ────────────────> /home/node/.claude/ (sessions)
+    ├── data/ipc/{folder} ────────> /workspace/ipc
+    ├── data/sessions/{folder}/.claude/ ──> /home/node/.claude/ (isolated per-group)
     └── (main only) project root ──> /workspace/project
 ```
 
@@ -171,14 +171,7 @@ mounts.push({
 
 ### 6. MCP Server Failures
 
-If an MCP server fails to start, the agent may exit. Test MCP servers individually:
-
-```bash
-# Test Gmail MCP
-container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
-  npx -y @gongrzhe/server-gmail-autoauth-mcp --help
-'
-```
+If an MCP server fails to start, the agent may exit. Check the container logs for MCP initialization errors.
 
 ## Manual Container Testing
 
@@ -267,7 +260,7 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
 
 ## Session Persistence
 
-Claude sessions are stored in `~/.claude/projects/` on the host, mounted to `/home/node/.claude/projects/` inside the container.
+Claude sessions are stored per-group in `data/sessions/{group}/.claude/` for security isolation. Each group has its own session directory, preventing cross-group access to conversation history.
 
 **Critical:** The mount path must match the container user's HOME directory:
 - Container user: `node`
@@ -277,11 +270,11 @@ Claude sessions are stored in `~/.claude/projects/` on the host, mounted to `/ho
 To clear sessions:
 
 ```bash
-# Clear all sessions
-rm -rf ~/.claude/projects/
+# Clear all sessions for all groups
+rm -rf data/sessions/
 
 # Clear sessions for a specific group
-rm -rf ~/.claude/projects/*workspace-group*/
+rm -rf data/sessions/{groupFolder}/.claude/
 
 # Also clear the session ID from NanoClaw's tracking
 echo '{}' > data/sessions.json

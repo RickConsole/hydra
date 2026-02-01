@@ -54,7 +54,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 │  │  Volume mounts:                                                │   │
 │  │    • groups/{name}/ → /workspace/group                         │   │
 │  │    • groups/global/ → /workspace/global/ (non-main only)        │   │
-│  │    • ~/.claude/ → /home/node/.claude/ (sessions)               │   │
+│  │    • data/sessions/{group}/.claude/ → /home/node/.claude/      │   │
 │  │    • Additional dirs → /workspace/extra/*                      │   │
 │  │                                                                │   │
 │  │  Tools (all groups):                                           │   │
@@ -63,7 +63,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 │  │    • WebSearch, WebFetch (internet access)                     │   │
 │  │    • agent-browser (browser automation)                        │   │
 │  │    • mcp__nanoclaw__* (scheduler tools via IPC)                │   │
-│  │    • mcp__gmail__* (email)                                     │   │
+│  │                                                                │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
@@ -87,7 +87,10 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 ```
 nanoclaw/
 ├── CLAUDE.md                      # Project context for Claude Code
-├── SPEC.md                        # This specification document
+├── docs/
+│   ├── SPEC.md                    # This specification document
+│   ├── REQUIREMENTS.md            # Architecture decisions
+│   └── SECURITY.md                # Security model
 ├── README.md                      # User documentation
 ├── package.json                   # Node.js dependencies
 ├── tsconfig.json                  # TypeScript configuration
@@ -338,7 +341,7 @@ Sessions enable conversation continuity - Claude remembers what you talked about
    ├── cwd: groups/{group-name}/
    ├── prompt: conversation history + current message
    ├── resume: session_id (for continuity)
-   └── mcpServers: gmail, scheduler
+   └── mcpServers: nanoclaw (scheduler)
    │
    ▼
 8. Claude processes message:
@@ -400,7 +403,7 @@ NanoClaw has a built-in scheduler that runs tasks as full agents in their group'
 ### How Scheduling Works
 
 1. **Group Context**: Tasks created in a group run with that group's working directory and memory
-2. **Full Agent Capabilities**: Scheduled tasks have access to all tools (WebSearch, Gmail, file operations, etc.)
+2. **Full Agent Capabilities**: Scheduled tasks have access to all tools (WebSearch, file operations, etc.)
 3. **Optional Messaging**: Tasks can send messages to their group using the `send_message` tool, or complete silently
 4. **Main Channel Privileges**: The main channel can schedule tasks for any group and view all tasks
 
@@ -471,18 +474,6 @@ The `nanoclaw` MCP server is created dynamically per agent call with the current
 | `resume_task` | Resume a paused task |
 | `cancel_task` | Delete a task |
 | `send_message` | Send a WhatsApp message to the group |
-
-### Gmail MCP (@gongrzhe/server-gmail-autoauth-mcp)
-
-Provides email capabilities. Requires Google Cloud OAuth setup.
-
-**Available Tools:**
-| Tool | Purpose |
-|------|---------|
-| `search_messages` | Search inbox |
-| `get_message` | Read full email |
-| `send_message` | Send email |
-| `reply_message` | Reply to thread |
 
 ---
 
@@ -593,9 +584,8 @@ WhatsApp messages could contain malicious instructions attempting to manipulate 
 
 | Credential | Storage Location | Notes |
 |------------|------------------|-------|
-| Claude CLI Auth | ~/.claude/ | Mounted to /home/node/.claude/ in container |
+| Claude CLI Auth | data/sessions/{group}/.claude/ | Per-group isolation, mounted to /home/node/.claude/ |
 | WhatsApp Session | store/auth/ | Auto-created, persists ~20 days |
-| Gmail OAuth Tokens | ~/.gmail-mcp/ | Created during setup (optional) |
 
 ### File Permissions
 

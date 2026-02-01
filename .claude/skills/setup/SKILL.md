@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Run initial NanoClaw setup. Use when user wants to install dependencies, authenticate WhatsApp/Gmail, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanoclaw", or first-time setup requests.
+description: Run initial NanoClaw setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanoclaw", or first-time setup requests.
 ---
 
 # NanoClaw Setup
@@ -286,34 +286,7 @@ Tell the user:
 > }
 > ```
 
-## 9. Gmail Authentication (Optional)
-
-Ask the user:
-> Do you want to enable Gmail integration for reading/sending emails?
->
-> **Note:** This requires setting up Google Cloud Platform OAuth credentials, which involves:
-> 1. Creating a GCP project
-> 2. Enabling the Gmail API
-> 3. Creating OAuth 2.0 credentials
-> 4. Downloading a credentials file
->
-> This takes about 5-10 minutes. Skip if you don't need email integration.
-
-If yes, guide them through the prerequisites:
-1. Go to https://console.cloud.google.com
-2. Create a new project (or use an existing one)
-3. Enable the Gmail API (APIs & Services → Enable APIs → search "Gmail API")
-4. Create OAuth 2.0 credentials (APIs & Services → Credentials → Create Credentials → OAuth client ID → Desktop app)
-5. Download the JSON file and save to `~/.gmail-mcp/gcp-oauth.keys.json`
-
-Then run:
-```bash
-npx -y @gongrzhe/server-gmail-autoauth-mcp
-```
-
-This will open a browser for OAuth consent. After authorization, credentials are cached.
-
-## 10. Configure launchd Service
+## 9. Configure launchd Service
 
 Generate the plist file with correct paths automatically:
 
