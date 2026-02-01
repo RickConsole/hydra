@@ -4,7 +4,7 @@ import pino from 'pino';
 import { CronExpressionParser } from 'cron-parser';
 import { getDueTasks, updateTaskAfterRun, logTaskRun, getTaskById, getAllTasks } from './db.js';
 import { ScheduledTask, RegisteredGroup } from './types.js';
-import { GROUPS_DIR, SCHEDULER_POLL_INTERVAL, DATA_DIR, MAIN_GROUP_FOLDER } from './config.js';
+import { GROUPS_DIR, SCHEDULER_POLL_INTERVAL, DATA_DIR, MAIN_GROUP_FOLDER, TIMEZONE } from './config.js';
 import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
 
 const logger = pino({
@@ -96,7 +96,7 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
 
   let nextRun: string | null = null;
   if (task.schedule_type === 'cron') {
-    const interval = CronExpressionParser.parse(task.schedule_value);
+    const interval = CronExpressionParser.parse(task.schedule_value, { tz: TIMEZONE });
     nextRun = interval.next().toISOString();
   } else if (task.schedule_type === 'interval') {
     const ms = parseInt(task.schedule_value, 10);

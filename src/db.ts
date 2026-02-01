@@ -162,18 +162,19 @@ export function storeMessage(msg: proto.IWebMessageInfo, chatJid: string, isFrom
     .run(msgId, chatJid, sender, senderName, content, timestamp, isFromMe ? 1 : 0);
 }
 
-export function getNewMessages(jids: string[], lastTimestamp: string): { messages: NewMessage[]; newTimestamp: string } {
+export function getNewMessages(jids: string[], lastTimestamp: string, botPrefix: string): { messages: NewMessage[]; newTimestamp: string } {
   if (jids.length === 0) return { messages: [], newTimestamp: lastTimestamp };
 
   const placeholders = jids.map(() => '?').join(',');
+  // Filter out bot's own messages by checking content prefix (not is_from_me, since user shares the account)
   const sql = `
     SELECT id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
-    WHERE timestamp > ? AND chat_jid IN (${placeholders})
+    WHERE timestamp > ? AND chat_jid IN (${placeholders}) AND content NOT LIKE ?
     ORDER BY timestamp
   `;
 
-  const rows = db.prepare(sql).all(lastTimestamp, ...jids) as NewMessage[];
+  const rows = db.prepare(sql).all(lastTimestamp, ...jids, `${botPrefix}:%`) as NewMessage[];
 
   let newTimestamp = lastTimestamp;
   for (const row of rows) {
@@ -183,14 +184,15 @@ export function getNewMessages(jids: string[], lastTimestamp: string): { message
   return { messages: rows, newTimestamp };
 }
 
-export function getMessagesSince(chatJid: string, sinceTimestamp: string): NewMessage[] {
+export function getMessagesSince(chatJid: string, sinceTimestamp: string, botPrefix: string): NewMessage[] {
+  // Filter out bot's own messages by checking content prefix
   const sql = `
     SELECT id, chat_jid, sender, sender_name, content, timestamp
     FROM messages
-    WHERE chat_jid = ? AND timestamp > ?
+    WHERE chat_jid = ? AND timestamp > ? AND content NOT LIKE ?
     ORDER BY timestamp
   `;
-  return db.prepare(sql).all(chatJid, sinceTimestamp) as NewMessage[];
+  return db.prepare(sql).all(chatJid, sinceTimestamp, `${botPrefix}:%`) as NewMessage[];
 }
 
 export function createTask(task: Omit<ScheduledTask, 'last_run' | 'last_result'>): void {

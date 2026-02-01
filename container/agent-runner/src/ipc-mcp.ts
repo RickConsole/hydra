@@ -80,14 +80,14 @@ If unsure which mode to use, ask the user. Examples:
 - "Follow up on my request" → group (needs to know what was requested)
 - "Generate a daily report" → isolated (just needs instructions in prompt)
 
-SCHEDULE VALUE FORMAT:
-• cron: Standard cron expression (e.g., "*/5 * * * *" for every 5 minutes, "0 9 * * *" for daily at 9am)
+SCHEDULE VALUE FORMAT (all times are LOCAL timezone):
+• cron: Standard cron expression (e.g., "*/5 * * * *" for every 5 minutes, "0 9 * * *" for daily at 9am LOCAL time)
 • interval: Milliseconds between runs (e.g., "300000" for 5 minutes, "3600000" for 1 hour)
-• once: ISO 8601 timestamp (e.g., "2026-02-01T15:30:00.000Z"). Calculate this from current time.`,
+• once: Local time WITHOUT "Z" suffix (e.g., "2026-02-01T15:30:00"). Do NOT use UTC/Z suffix.`,
         {
           prompt: z.string().describe('What the agent should do when the task runs. For isolated mode, include all necessary context here.'),
           schedule_type: z.enum(['cron', 'interval', 'once']).describe('cron=recurring at specific times, interval=recurring every N ms, once=run once at specific time'),
-          schedule_value: z.string().describe('cron: "*/5 * * * *" | interval: milliseconds like "300000" | once: ISO timestamp like "2026-02-01T15:30:00.000Z"'),
+          schedule_value: z.string().describe('cron: "*/5 * * * *" | interval: milliseconds like "300000" | once: local timestamp like "2026-02-01T15:30:00" (no Z suffix!)'),
           context_mode: z.enum(['group', 'isolated']).default('group').describe('group=runs with chat history and memory, isolated=fresh session (include context in prompt)'),
           target_group: z.string().optional().describe('Target group folder (main only, defaults to current group)')
         },

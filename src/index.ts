@@ -16,7 +16,8 @@ import {
   DATA_DIR,
   TRIGGER_PATTERN,
   MAIN_GROUP_FOLDER,
-  IPC_POLL_INTERVAL
+  IPC_POLL_INTERVAL,
+  TIMEZONE
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
 import { initDatabase, storeMessage, storeChatMetadata, getNewMessages, getMessagesSince, getAllTasks, getTaskById, updateChatName, getAllChats, getLastGroupSync, setLastGroupSync } from './db.js';
@@ -128,15 +129,18 @@ async function processMessage(msg: NewMessage): Promise<void> {
 
   // Get all messages since last agent interaction so the session has full context
   const sinceTimestamp = lastAgentTimestamp[msg.chat_jid] || '';
-  const missedMessages = getMessagesSince(msg.chat_jid, sinceTimestamp);
+  const missedMessages = getMessagesSince(msg.chat_jid, sinceTimestamp, ASSISTANT_NAME);
 
   const lines = missedMessages.map(m => {
-    const d = new Date(m.timestamp);
-    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    return `[${date} ${time}] ${m.sender_name}: ${m.content}`;
+    // Escape XML special characters in content
+    const escapeXml = (s: string) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    return `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`;
   });
-  const prompt = lines.join('\n');
+  const prompt = `<messages>\n${lines.join('\n')}\n</messages>`;
 
   if (!prompt) return;
 
@@ -335,7 +339,7 @@ async function processTaskIpc(
         let nextRun: string | null = null;
         if (scheduleType === 'cron') {
           try {
-            const interval = CronExpressionParser.parse(data.schedule_value);
+            const interval = CronExpressionParser.parse(data.schedule_value, { tz: TIMEZONE });
             nextRun = interval.next().toISOString();
           } catch {
             logger.warn({ scheduleValue: data.schedule_value }, 'Invalid cron expression');
@@ -512,7 +516,7 @@ async function startMessageLoop(): Promise<void> {
   while (true) {
     try {
       const jids = Object.keys(registeredGroups);
-      const { messages } = getNewMessages(jids, lastTimestamp);
+      const { messages } = getNewMessages(jids, lastTimestamp, ASSISTANT_NAME);
 
       if (messages.length > 0) logger.info({ count: messages.length }, 'New messages');
       for (const msg of messages) {

@@ -16,3 +16,7 @@ export const CONTAINER_TIMEOUT = parseInt(process.env.CONTAINER_TIMEOUT || '3000
 export const IPC_POLL_INTERVAL = 1000;
 
 export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
+
+// Timezone for scheduled tasks (cron expressions, etc.)
+// Uses system timezone by default
+export const TIMEZONE = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
