@@ -247,18 +247,21 @@ async function processTaskIpc(
 
   switch (data.type) {
     case 'schedule_task':
-      if (data.prompt && data.schedule_type && data.schedule_value && data.groupFolder && data.chatJid) {
+      if (data.prompt && data.schedule_type && data.schedule_value && data.groupFolder) {
         // Authorization: non-main groups can only schedule for themselves
         const targetGroup = data.groupFolder;
         if (!isMain && targetGroup !== sourceGroup) {
-          logger.warn({ sourceGroup, targetGroup, chatJid: data.chatJid }, 'Unauthorized schedule_task attempt blocked');
+          logger.warn({ sourceGroup, targetGroup }, 'Unauthorized schedule_task attempt blocked');
           break;
         }
 
-        // Authorization: verify the chatJid belongs to the target group
-        const chatGroup = registeredGroups[data.chatJid];
-        if (!isMain && (!chatGroup || chatGroup.folder !== targetGroup)) {
-          logger.warn({ sourceGroup, targetGroup, chatJid: data.chatJid }, 'Unauthorized schedule_task chatJid blocked');
+        // Resolve the correct JID for the target group (don't trust IPC payload)
+        const targetJid = Object.entries(registeredGroups).find(
+          ([, group]) => group.folder === targetGroup
+        )?.[0];
+
+        if (!targetJid) {
+          logger.warn({ targetGroup }, 'Cannot schedule task: target group not registered');
           break;
         }
 
@@ -266,20 +269,34 @@ async function processTaskIpc(
 
         let nextRun: string | null = null;
         if (scheduleType === 'cron') {
-          const interval = CronExpressionParser.parse(data.schedule_value);
-          nextRun = interval.next().toISOString();
+          try {
+            const interval = CronExpressionParser.parse(data.schedule_value);
+            nextRun = interval.next().toISOString();
+          } catch {
+            logger.warn({ scheduleValue: data.schedule_value }, 'Invalid cron expression');
+            break;
+          }
         } else if (scheduleType === 'interval') {
           const ms = parseInt(data.schedule_value, 10);
+          if (isNaN(ms) || ms <= 0) {
+            logger.warn({ scheduleValue: data.schedule_value }, 'Invalid interval');
+            break;
+          }
           nextRun = new Date(Date.now() + ms).toISOString();
         } else if (scheduleType === 'once') {
-          nextRun = data.schedule_value; // ISO timestamp
+          const scheduled = new Date(data.schedule_value);
+          if (isNaN(scheduled.getTime())) {
+            logger.warn({ scheduleValue: data.schedule_value }, 'Invalid timestamp');
+            break;
+          }
+          nextRun = scheduled.toISOString();
         }
 
         const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         createTask({
           id: taskId,
           group_folder: targetGroup,
-          chat_jid: data.chatJid,
+          chat_jid: targetJid,
           prompt: data.prompt,
           schedule_type: scheduleType,
           schedule_value: data.schedule_value,

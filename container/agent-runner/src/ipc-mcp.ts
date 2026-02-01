@@ -7,6 +7,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
+import { CronExpressionParser } from 'cron-parser';
 
 const IPC_DIR = '/workspace/ipc';
 const MESSAGES_DIR = path.join(IPC_DIR, 'messages');
@@ -80,6 +81,34 @@ IMPORTANT - schedule_value format depends on schedule_type:
           target_group: z.string().optional().describe('Target group folder (main only, defaults to current group)')
         },
         async (args) => {
+          // Validate schedule_value before writing IPC
+          if (args.schedule_type === 'cron') {
+            try {
+              CronExpressionParser.parse(args.schedule_value);
+            } catch (err) {
+              return {
+                content: [{ type: 'text', text: `Invalid cron: "${args.schedule_value}". Use format like "0 9 * * *" (daily 9am) or "*/5 * * * *" (every 5 min).` }],
+                isError: true
+              };
+            }
+          } else if (args.schedule_type === 'interval') {
+            const ms = parseInt(args.schedule_value, 10);
+            if (isNaN(ms) || ms <= 0) {
+              return {
+                content: [{ type: 'text', text: `Invalid interval: "${args.schedule_value}". Must be positive milliseconds (e.g., "300000" for 5 min).` }],
+                isError: true
+              };
+            }
+          } else if (args.schedule_type === 'once') {
+            const date = new Date(args.schedule_value);
+            if (isNaN(date.getTime())) {
+              return {
+                content: [{ type: 'text', text: `Invalid timestamp: "${args.schedule_value}". Use ISO 8601 format like "2026-02-01T15:30:00.000Z".` }],
+                isError: true
+              };
+            }
+          }
+
           // Non-main groups can only schedule for themselves
           const targetGroup = isMain && args.target_group ? args.target_group : groupFolder;
 

@@ -45,8 +45,13 @@ async function readStdin(): Promise<string> {
   });
 }
 
+const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
+const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+
 function writeOutput(output: ContainerOutput): void {
+  console.log(OUTPUT_START_MARKER);
   console.log(JSON.stringify(output));
+  console.log(OUTPUT_END_MARKER);
 }
 
 function log(message: string): void {
