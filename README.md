@@ -4,7 +4,7 @@ A personal Claude assistant. Lightweight, secure, and built to be understood and
 
 ## Why This Exists
 
-[OpenClaw](https://github.com/anthropics/openclaw) is an impressive project with a great vision - they built something genuinely useful that many people rely on. But from the moment I installed it, I haven't slept well at night. I have no idea how it works, and no realistic chance of ever understanding the codebase. Multiple processes, endless configuration, layers of abstraction - it's a black box I'm trusting with access to my life.
+[OpenClaw](https://github.com/anthropics/openclaw) is an impressive project with a great vision. They built something that is genuinely useful for me (and a apparently a few others). But from the moment I installed it, I haven't slept well at night. I have no idea how it works, and no realistic chance of ever understanding the codebase. Multiple processes, endless configuration, layers of abstraction. It's a black box I'm trusting with access to my life.
 
 NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes (with Claude Code explaining it). One Node.js process. A handful of files. Agents run in actual containers, not behind application-level permissions.
 
@@ -14,17 +14,17 @@ NanoClaw gives you the same core functionality in a codebase you can understand 
 
 **Secure by isolation.** Agents run in Linux containers (Apple Container). They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your Mac.
 
-**Built for one user.** This isn't a framework. It's working software for my needs - WhatsApp and Email. You fork it and make it yours.
+**Built for one user.** This isn't a framework. It's working software that fits my exact needs. You fork it and have Claude Code make it match your exact needs.
 
 **Customization = code changes.** No configuration sprawl. Want different behavior? Modify the code. The codebase is small enough that this is safe.
 
-**AI-native.** No installation wizard - Claude Code guides setup. No monitoring dashboard - ask Claude what's happening. No debugging tools - describe the problem, Claude fixes it.
+**AI-native.** No installation wizard; Claude Code guides setup. No monitoring dashboard; ask Claude what's happening. No debugging tools; describe the problem, Claude fixes it.
 
-**Skills over features.** Contributors don't add "Telegram alongside WhatsApp." They contribute skills like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
+**Skills over features.** Contributors shouldn't add features (e.g. support for Telegram) to the codebase. Instead, they contribute skills like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
 
-**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters - a bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is the best harness available.
+**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters. A bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is (IMO) the best harness available.
 
-**No ToS gray areas.** Because it uses Claude Agent SDK natively with no hacks or workarounds, using your subscription with your auth token is completely legitimate. No risk of being shut down for terms of service violations (I am not a lawyer).
+**No ToS gray areas.** Because it uses Claude Agent SDK natively with no hacks or workarounds, using your subscription with your auth token is completely legitimate (I think). No risk of being shut down for terms of service violations (I am not a lawyer).
 
 ## Quick Start
 
@@ -36,8 +36,6 @@ claude
 
 Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
 
-That's it. No manual configuration files to edit.
-
 ## What You Get
 
 - **WhatsApp I/O** - Message Claude from your phone
@@ -46,17 +44,16 @@ That's it. No manual configuration files to edit.
 - **Email** - Read and send via Gmail (optional)
 - **Scheduled tasks** - Recurring jobs that run Claude and can message you back
 - **Web access** - Search and fetch content
-- **Container isolation** - Agents sandboxed in Linux VMs
+- **Container isolation** - Agents sandboxed in Apple containers
 
 ## Usage
 
 Talk to your assistant with the trigger word (default: `@Andy`):
 
 ```
-@Andy give me an overview of the sales pipeline
-@Andy review the git history for the past week and update CLAUDE.md with anything notable
-@Andy research recent developments in AI agents and write a summary to research/ai-agents.md
-@Andy every Monday at 8am, compile news from Hacker News and TechCrunch and message me a briefing
+@Andy send an overview of the sales pipeline every weekday morning at 9am (has access to my Obsidian vault folder)
+@Andy review the git history for the past week each Friday and update the README if there's drift
+@Andy every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
 ```
 
 Clear conversation context:
@@ -68,20 +65,21 @@ From the main channel (your self-chat), you can manage groups and tasks:
 ```
 @Andy list all scheduled tasks across groups
 @Andy pause the Monday briefing task
+@Andy join the Family Chat group
 ```
 
 ## Customization
 
 There are no configuration files to learn. Just tell Claude Code what you want:
 
-- "Change the trigger word to @Bot"
-- "Make responses shorter and more direct"
+- "Change the trigger word to @Bob"
+- "Remember in the future to make responses shorter and more direct"
 - "Add a custom greeting when I say good morning"
 - "Store conversation summaries weekly"
 
 Or run `/customize` for guided changes.
 
-The codebase is small enough that Claude can safely modify it. You're not configuring a black box - you're shaping code you can read.
+The codebase is small enough that Claude can safely modify it.
 
 ## Contributing
 
@@ -89,23 +87,21 @@ The codebase is small enough that Claude can safely modify it. You're not config
 
 If you want to add Telegram support, don't create a PR that adds Telegram alongside WhatsApp. Instead, contribute a skill file (`.claude/skills/add-telegram/SKILL.md`) that teaches Claude Code how to transform a NanoClaw installation to use Telegram.
 
-Users then run `/add-telegram` on their fork and get clean code that does exactly what they need - not a bloated system trying to support every use case.
+Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
 
 ### RFS (Request for Skills)
 
 Skills we'd love to see:
 
 **Communication Channels**
-- `/add-telegram` - Add Telegram as input
-- `/add-slack` - Add Slack as input
-- `/add-discord` - Add Discord as input
-- `/convert-to-telegram` - Replace WhatsApp entirely
+- `/add-telegram` - Add Telegram as channel. Should give the user option to replace WhatsApp or add as additional channel. Also should be possible to add it as a control channel (where it can trigger actions) or just a channel that can be used in actions triggered elsewhere
+- `/add-slack` - Add Slack
+- `/add-discord` - Add Discord
 
 **Container Runtime**
 - `/convert-to-docker` - Replace Apple Container with Docker (unlocks Linux)
 
 **Platform Support**
-- `/setup-linux` - Full Linux support (depends on Docker)
 - `/setup-windows` - Windows via WSL2 + Docker
 
 ## Requirements
@@ -138,23 +134,35 @@ Because I use WhatsApp. Fork it and run a skill to change it. That's the whole p
 
 **Why Apple Container instead of Docker?**
 
-Lightweight, fast, and built into macOS. Requires macOS Tahoe - runs great on a Mac Mini. Contribute a skill to convert to Docker if you want Docker.
+Lightweight, fast, and built into macOS. Requires macOS Tahoe and runs great on a Mac Mini. Contribute a skill to convert to Docker if you want Docker.
 
 **Can I run this on Linux?**
 
-Yes. Run Claude Code and say "make this run on Linux." Half an hour of back-and-forth and it'll work. When you're done, ask Claude to create a skill explaining how to make it work on Linux, then contribute the skill back to the project.
+Yes. Run Claude Code and say "make this run on Linux." ~30 min of back-and-forth and it'll work. When you're done, ask Claude to create a skill explaining how to make it work on Linux, then contribute the skill back to the project.
 
 **Is this secure?**
 
-Agents run in actual Linux VMs, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running - but the codebase is small enough that you actually can.
+Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running, but the codebase is small enough that you actually can.
 
 **Why no configuration files?**
 
-We don't want configuration sprawl. It's a small codebase - make it match your exact needs. Every user should customize it to what they want rather than configuring a generic system. If you like having config files, tell Claude to add them.
+We don't want configuration sprawl. Every user should customize it to so that the code matches exactly what they want rather than configuring a generic system. If you like having config files, tell Claude to add them.
 
 **How do I debug issues?**
 
 Ask Claude Code. "Why isn't the scheduler running?" "What's in the recent logs?" "Why did this message not get a response?" That's the AI-native approach.
+
+**Why isn't the setup working for me?**
+
+I don't know. Run `claude`, then run `/debug`. If claude finds an issue that is likely affecting other users, open a PR to modify the setup SKILL.md.
+
+**What changes will be accepted into the codebase?**
+
+Security fixes, bug fixes, and clear improvements to the base configuration. That's it.
+
+Everything else (new capabilities, OS compatibility, hardware support, enhancements) should be contributed as skills.
+
+This keeps the base system minimal and lets every user customize their installation without inheriting features they don't want.
 
 ## License
 

@@ -79,7 +79,7 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 - **Browser automation** via agent-browser
 
 **Implementation approach:**
-- Leverage existing tools (WhatsApp connector, Claude Agent SDK, MCP servers)
+- Use existing tools (WhatsApp connector, Claude Agent SDK, MCP servers)
 - Minimal glue code
 - File-based systems where possible (CLAUDE.md for memory, folders for groups)
 
