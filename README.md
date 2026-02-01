@@ -8,9 +8,9 @@
 
 ## Why This Exists
 
-[OpenClaw](https://github.com/anthropics/openclaw) is an impressive project with a great vision. They built something that is genuinely useful for me (and a apparently a few others). But from the moment I installed it, I haven't slept well at night. I have no idea how it works, and no realistic chance of ever understanding the codebase. Multiple processes, endless configuration, layers of abstraction. It's a black box I'm trusting with access to my life.
+[OpenClaw](https://github.com/anthropics/openclaw) is an impressive project with a great vision. But I can't sleep well running software I don't understand with access to my life. OpenClaw has 52+ modules, 8 config management files, 45+ dependencies, and abstractions for 15 channel providers. Security is application-level (allowlists, pairing codes) rather than OS isolation—everything runs in one Node process with shared memory.
 
-NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes (with Claude Code explaining it). One Node.js process. A handful of files. Agents run in actual containers, not behind application-level permissions.
+NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes. One process. A handful of files. Agents run in actual Linux containers with filesystem isolation, not behind permission checks.
 
 ## Quick Start
 
