@@ -95,14 +95,15 @@ export function storeChatMetadata(chatJid: string, timestamp: string, name?: str
 }
 
 /**
- * Update chat name without changing timestamp.
+ * Update chat name without changing timestamp for existing chats.
+ * New chats get the current time as their initial timestamp.
  * Used during group metadata sync.
  */
 export function updateChatName(chatJid: string, name: string): void {
   db.prepare(`
     INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)
     ON CONFLICT(jid) DO UPDATE SET name = excluded.name
-  `).run(chatJid, name, new Date(0).toISOString());
+  `).run(chatJid, name, new Date().toISOString());
 }
 
 export interface ChatInfo {
