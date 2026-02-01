@@ -27,6 +27,8 @@ Single Node.js process that connects to WhatsApp, routes messages to Claude Agen
 
 ## Development
 
+Run commands directly—don't tell the user to run them.
+
 ```bash
 npm run dev          # Run with hot reload
 npm run build        # Compile TypeScript

@@ -36,6 +36,14 @@ let sessions: Session = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 
+async function setTyping(jid: string, isTyping: boolean): Promise<void> {
+  try {
+    await sock.sendPresenceUpdate(isTyping ? 'composing' : 'paused', jid);
+  } catch (err) {
+    logger.debug({ jid, err }, 'Failed to update typing status');
+  }
+}
+
 function loadJson<T>(filePath: string, defaultValue: T): T {
   try {
     if (fs.existsSync(filePath)) {
@@ -107,7 +115,10 @@ async function processMessage(msg: NewMessage): Promise<void> {
   if (!prompt) return;
 
   logger.info({ group: group.name, messageCount: missedMessages.length }, 'Processing message');
+
+  await setTyping(msg.chat_jid, true);
   const response = await runAgent(group, prompt, msg.chat_jid);
+  await setTyping(msg.chat_jid, false);
 
   // Update last agent timestamp
   lastAgentTimestamp[msg.chat_jid] = msg.timestamp;
