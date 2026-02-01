@@ -64,6 +64,11 @@ export function initDatabase(): void {
   try {
     db.exec(`ALTER TABLE messages ADD COLUMN sender_name TEXT`);
   } catch { /* column already exists */ }
+
+  // Add context_mode column if it doesn't exist (migration for existing DBs)
+  try {
+    db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`);
+  } catch { /* column already exists */ }
 }
 
 /**
@@ -131,8 +136,8 @@ export function getMessagesSince(chatJid: string, sinceTimestamp: string): NewMe
 
 export function createTask(task: Omit<ScheduledTask, 'last_run' | 'last_result'>): void {
   db.prepare(`
-    INSERT INTO scheduled_tasks (id, group_folder, chat_jid, prompt, schedule_type, schedule_value, next_run, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO scheduled_tasks (id, group_folder, chat_jid, prompt, schedule_type, schedule_value, context_mode, next_run, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     task.id,
     task.group_folder,
@@ -140,6 +145,7 @@ export function createTask(task: Omit<ScheduledTask, 'last_run' | 'last_result'>
     task.prompt,
     task.schedule_type,
     task.schedule_value,
+    task.context_mode || 'isolated',
     task.next_run,
     task.status,
     task.created_at

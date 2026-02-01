@@ -237,6 +237,7 @@ async function processTaskIpc(
     prompt?: string;
     schedule_type?: string;
     schedule_value?: string;
+    context_mode?: string;
     groupFolder?: string;
     chatJid?: string;
   },
@@ -295,6 +296,9 @@ async function processTaskIpc(
         }
 
         const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const contextMode = (data.context_mode === 'group' || data.context_mode === 'isolated')
+          ? data.context_mode
+          : 'isolated';
         createTask({
           id: taskId,
           group_folder: targetGroup,
@@ -302,11 +306,12 @@ async function processTaskIpc(
           prompt: data.prompt,
           schedule_type: scheduleType,
           schedule_value: data.schedule_value,
+          context_mode: contextMode,
           next_run: nextRun,
           status: 'active',
           created_at: new Date().toISOString()
         });
-        logger.info({ taskId, sourceGroup, targetGroup }, 'Task created via IPC');
+        logger.info({ taskId, sourceGroup, targetGroup, contextMode }, 'Task created via IPC');
       }
       break;
 
@@ -388,7 +393,11 @@ async function connectWhatsApp(): Promise<void> {
       }
     } else if (connection === 'open') {
       logger.info('Connected to WhatsApp');
-      startSchedulerLoop({ sendMessage, registeredGroups: () => registeredGroups });
+      startSchedulerLoop({
+        sendMessage,
+        registeredGroups: () => registeredGroups,
+        getSessions: () => sessions
+      });
       startIpcWatcher();
       startMessageLoop();
     }

@@ -70,14 +70,25 @@ export function createIpcMcp(ctx: IpcMcpContext) {
         'schedule_task',
         `Schedule a recurring or one-time task. The task will run as a full agent with access to all tools.
 
-IMPORTANT - schedule_value format depends on schedule_type:
+CONTEXT MODE - Choose based on task type:
+• "group" (recommended for most tasks): Task runs in the group's conversation context, with access to chat history and memory. Use for tasks that need context about ongoing discussions, user preferences, or previous interactions.
+• "isolated": Task runs in a fresh session with no conversation history. Use for independent tasks that don't need prior context. When using isolated mode, include all necessary context in the prompt itself.
+
+If unsure which mode to use, ask the user. Examples:
+- "Remind me about our discussion" → group (needs conversation context)
+- "Check the weather every morning" → isolated (self-contained task)
+- "Follow up on my request" → group (needs to know what was requested)
+- "Generate a daily report" → isolated (just needs instructions in prompt)
+
+SCHEDULE VALUE FORMAT:
 • cron: Standard cron expression (e.g., "*/5 * * * *" for every 5 minutes, "0 9 * * *" for daily at 9am)
 • interval: Milliseconds between runs (e.g., "300000" for 5 minutes, "3600000" for 1 hour)
 • once: ISO 8601 timestamp (e.g., "2026-02-01T15:30:00.000Z"). Calculate this from current time.`,
         {
-          prompt: z.string().describe('What the agent should do when the task runs'),
+          prompt: z.string().describe('What the agent should do when the task runs. For isolated mode, include all necessary context here.'),
           schedule_type: z.enum(['cron', 'interval', 'once']).describe('cron=recurring at specific times, interval=recurring every N ms, once=run once at specific time'),
           schedule_value: z.string().describe('cron: "*/5 * * * *" | interval: milliseconds like "300000" | once: ISO timestamp like "2026-02-01T15:30:00.000Z"'),
+          context_mode: z.enum(['group', 'isolated']).default('group').describe('group=runs with chat history and memory, isolated=fresh session (include context in prompt)'),
           target_group: z.string().optional().describe('Target group folder (main only, defaults to current group)')
         },
         async (args) => {
@@ -117,6 +128,7 @@ IMPORTANT - schedule_value format depends on schedule_type:
             prompt: args.prompt,
             schedule_type: args.schedule_type,
             schedule_value: args.schedule_value,
+            context_mode: args.context_mode || 'group',
             groupFolder: targetGroup,
             chatJid,
             createdBy: groupFolder,
