@@ -5,6 +5,7 @@
 
 import { spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import pino from 'pino';
 import {
@@ -19,6 +20,14 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: { target: 'pino-pretty', options: { colorize: true } }
 });
+
+function getHomeDir(): string {
+  const home = process.env.HOME || os.homedir();
+  if (!home) {
+    throw new Error('Unable to determine home directory: HOME environment variable is not set and os.homedir() returned empty');
+  }
+  return home;
+}
 
 export interface ContainerInput {
   prompt: string;
@@ -44,7 +53,7 @@ interface VolumeMount {
 
 function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount[] {
   const mounts: VolumeMount[] = [];
-  const homeDir = process.env.HOME || '/Users/gavriel';
+  const homeDir = getHomeDir();
   const projectRoot = process.cwd();
 
   if (isMain) {
