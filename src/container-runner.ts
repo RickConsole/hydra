@@ -110,11 +110,13 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     });
   }
 
-  const ipcDir = path.join(DATA_DIR, 'ipc');
-  fs.mkdirSync(path.join(ipcDir, 'messages'), { recursive: true });
-  fs.mkdirSync(path.join(ipcDir, 'tasks'), { recursive: true });
+  // Per-group IPC namespace: each group gets its own IPC directory
+  // This prevents cross-group privilege escalation via IPC
+  const groupIpcDir = path.join(DATA_DIR, 'ipc', group.folder);
+  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
+  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
   mounts.push({
-    hostPath: ipcDir,
+    hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
     readonly: false
   });
@@ -359,17 +361,28 @@ export async function runContainerAgent(
   });
 }
 
-export function writeTasksSnapshot(tasks: Array<{
-  id: string;
-  groupFolder: string;
-  prompt: string;
-  schedule_type: string;
-  schedule_value: string;
-  status: string;
-  next_run: string | null;
-}>): void {
-  const ipcDir = path.join(DATA_DIR, 'ipc');
-  fs.mkdirSync(ipcDir, { recursive: true });
-  const tasksFile = path.join(ipcDir, 'current_tasks.json');
-  fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2));
+export function writeTasksSnapshot(
+  groupFolder: string,
+  isMain: boolean,
+  tasks: Array<{
+    id: string;
+    groupFolder: string;
+    prompt: string;
+    schedule_type: string;
+    schedule_value: string;
+    status: string;
+    next_run: string | null;
+  }>
+): void {
+  // Write filtered tasks to the group's IPC directory
+  const groupIpcDir = path.join(DATA_DIR, 'ipc', groupFolder);
+  fs.mkdirSync(groupIpcDir, { recursive: true });
+
+  // Main sees all tasks, others only see their own
+  const filteredTasks = isMain
+    ? tasks
+    : tasks.filter(t => t.groupFolder === groupFolder);
+
+  const tasksFile = path.join(groupIpcDir, 'current_tasks.json');
+  fs.writeFileSync(tasksFile, JSON.stringify(filteredTasks, null, 2));
 }
