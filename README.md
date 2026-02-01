@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  A personal Claude assistant. Lightweight, secure, and built to be understood and customized for your own needs.
+  My personal Claude assistant that runs securely in Apple containers. Lightweight and built to be understood and customized for your own needs.
 </p>
 
 ## Why This Exists
