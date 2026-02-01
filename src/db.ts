@@ -75,9 +75,68 @@ export function initDatabase(): void {
  * Store chat metadata only (no message content).
  * Used for all chats to enable group discovery without storing sensitive content.
  */
-export function storeChatMetadata(chatJid: string, timestamp: string): void {
-  db.prepare(`INSERT OR REPLACE INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`)
-    .run(chatJid, chatJid, timestamp);
+export function storeChatMetadata(chatJid: string, timestamp: string, name?: string): void {
+  if (name) {
+    // Update with name, preserving existing timestamp if newer
+    db.prepare(`
+      INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)
+      ON CONFLICT(jid) DO UPDATE SET
+        name = excluded.name,
+        last_message_time = MAX(last_message_time, excluded.last_message_time)
+    `).run(chatJid, name, timestamp);
+  } else {
+    // Update timestamp only, preserve existing name if any
+    db.prepare(`
+      INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)
+      ON CONFLICT(jid) DO UPDATE SET
+        last_message_time = MAX(last_message_time, excluded.last_message_time)
+    `).run(chatJid, chatJid, timestamp);
+  }
+}
+
+/**
+ * Update chat name without changing timestamp.
+ * Used during group metadata sync.
+ */
+export function updateChatName(chatJid: string, name: string): void {
+  db.prepare(`
+    INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)
+    ON CONFLICT(jid) DO UPDATE SET name = excluded.name
+  `).run(chatJid, name, new Date(0).toISOString());
+}
+
+export interface ChatInfo {
+  jid: string;
+  name: string;
+  last_message_time: string;
+}
+
+/**
+ * Get all known chats, ordered by most recent activity.
+ */
+export function getAllChats(): ChatInfo[] {
+  return db.prepare(`
+    SELECT jid, name, last_message_time
+    FROM chats
+    ORDER BY last_message_time DESC
+  `).all() as ChatInfo[];
+}
+
+/**
+ * Get timestamp of last group metadata sync.
+ */
+export function getLastGroupSync(): string | null {
+  // Store sync time in a special chat entry
+  const row = db.prepare(`SELECT last_message_time FROM chats WHERE jid = '__group_sync__'`).get() as { last_message_time: string } | undefined;
+  return row?.last_message_time || null;
+}
+
+/**
+ * Record that group metadata was synced.
+ */
+export function setLastGroupSync(): void {
+  const now = new Date().toISOString();
+  db.prepare(`INSERT OR REPLACE INTO chats (jid, name, last_message_time) VALUES ('__group_sync__', '__group_sync__', ?)`).run(now);
 }
 
 /**

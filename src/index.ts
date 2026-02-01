@@ -19,10 +19,12 @@ import {
   IPC_POLL_INTERVAL
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
-import { initDatabase, storeMessage, storeChatMetadata, getNewMessages, getMessagesSince, getAllTasks, getTaskById } from './db.js';
+import { initDatabase, storeMessage, storeChatMetadata, getNewMessages, getMessagesSince, getAllTasks, getTaskById, updateChatName, getAllChats, getLastGroupSync, setLastGroupSync } from './db.js';
 import { startSchedulerLoop } from './task-scheduler.js';
-import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
+import { runContainerAgent, writeTasksSnapshot, writeGroupsSnapshot, AvailableGroup } from './container-runner.js';
 import { loadJson, saveJson } from './utils.js';
+
+const GROUP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -56,6 +58,62 @@ function loadState(): void {
 function saveState(): void {
   saveJson(path.join(DATA_DIR, 'router_state.json'), { last_timestamp: lastTimestamp, last_agent_timestamp: lastAgentTimestamp });
   saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+}
+
+/**
+ * Sync group metadata from WhatsApp.
+ * Fetches all participating groups and stores their names in the database.
+ * Called on startup, daily, and on-demand via IPC.
+ */
+async function syncGroupMetadata(force = false): Promise<void> {
+  // Check if we need to sync (skip if synced recently, unless forced)
+  if (!force) {
+    const lastSync = getLastGroupSync();
+    if (lastSync) {
+      const lastSyncTime = new Date(lastSync).getTime();
+      const now = Date.now();
+      if (now - lastSyncTime < GROUP_SYNC_INTERVAL_MS) {
+        logger.debug({ lastSync }, 'Skipping group sync - synced recently');
+        return;
+      }
+    }
+  }
+
+  try {
+    logger.info('Syncing group metadata from WhatsApp...');
+    const groups = await sock.groupFetchAllParticipating();
+
+    let count = 0;
+    for (const [jid, metadata] of Object.entries(groups)) {
+      if (metadata.subject) {
+        updateChatName(jid, metadata.subject);
+        count++;
+      }
+    }
+
+    setLastGroupSync();
+    logger.info({ count }, 'Group metadata synced');
+  } catch (err) {
+    logger.error({ err }, 'Failed to sync group metadata');
+  }
+}
+
+/**
+ * Get available groups list for the agent.
+ * Returns groups ordered by most recent activity.
+ */
+function getAvailableGroups(): AvailableGroup[] {
+  const chats = getAllChats();
+  const registeredJids = new Set(Object.keys(registeredGroups));
+
+  return chats
+    .filter(c => c.jid !== '__group_sync__' && c.jid.endsWith('@g.us'))
+    .map(c => ({
+      jid: c.jid,
+      name: c.name,
+      lastActivity: c.last_message_time,
+      isRegistered: registeredJids.has(c.jid)
+    }));
 }
 
 async function processMessage(msg: NewMessage): Promise<void> {
@@ -109,6 +167,10 @@ async function runAgent(group: RegisteredGroup, prompt: string, chatJid: string)
     status: t.status,
     next_run: t.next_run
   })));
+
+  // Update available groups snapshot (main group only can see all groups)
+  const availableGroups = getAvailableGroups();
+  writeGroupsSnapshot(group.folder, isMain, availableGroups, new Set(Object.keys(registeredGroups)));
 
   try {
     const output = await runContainerAgent(group, {
@@ -351,6 +413,20 @@ async function processTaskIpc(
       }
       break;
 
+    case 'refresh_groups':
+      // Only main group can request a refresh
+      if (isMain) {
+        logger.info({ sourceGroup }, 'Group metadata refresh requested via IPC');
+        await syncGroupMetadata(true);
+        // Write updated snapshot immediately
+        const availableGroups = getAvailableGroups();
+        const { writeGroupsSnapshot: writeGroups } = await import('./container-runner.js');
+        writeGroups(sourceGroup, true, availableGroups, new Set(Object.keys(registeredGroups)));
+      } else {
+        logger.warn({ sourceGroup }, 'Unauthorized refresh_groups attempt blocked');
+      }
+      break;
+
     default:
       logger.warn({ type: data.type }, 'Unknown IPC task type');
   }
@@ -393,6 +469,12 @@ async function connectWhatsApp(): Promise<void> {
       }
     } else if (connection === 'open') {
       logger.info('Connected to WhatsApp');
+      // Sync group metadata on startup (respects 24h cache)
+      syncGroupMetadata().catch(err => logger.error({ err }, 'Initial group sync failed'));
+      // Set up daily sync timer
+      setInterval(() => {
+        syncGroupMetadata().catch(err => logger.error({ err }, 'Periodic group sync failed'));
+      }, GROUP_SYNC_INTERVAL_MS);
       startSchedulerLoop({
         sendMessage,
         registeredGroups: () => registeredGroups,

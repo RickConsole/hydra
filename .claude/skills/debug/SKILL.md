@@ -113,14 +113,16 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c 'ls -la /work
 Expected structure:
 ```
 /workspace/
-├── env-dir/env     # Environment file (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)
-├── group/          # Current group folder (cwd)
-├── project/        # Project root (main channel only)
-├── global/         # Global CLAUDE.md (non-main only)
-├── ipc/            # Inter-process communication
-│   ├── messages/   # Outgoing WhatsApp messages
-│   └── tasks/      # Scheduled task commands
-└── extra/          # Additional custom mounts
+├── env-dir/env           # Environment file (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)
+├── group/                # Current group folder (cwd)
+├── project/              # Project root (main channel only)
+├── global/               # Global CLAUDE.md (non-main only)
+├── ipc/                  # Inter-process communication
+│   ├── messages/         # Outgoing WhatsApp messages
+│   ├── tasks/            # Scheduled task commands
+│   ├── current_tasks.json    # Read-only: scheduled tasks visible to this group
+│   └── available_groups.json # Read-only: WhatsApp groups for activation (main only)
+└── extra/                # Additional custom mounts
 ```
 
 ### 4. Permission Issues
@@ -304,7 +306,19 @@ ls -la data/ipc/tasks/
 
 # Read a specific IPC file
 cat data/ipc/messages/*.json
+
+# Check available groups (main channel only)
+cat data/ipc/main/available_groups.json
+
+# Check current tasks snapshot
+cat data/ipc/{groupFolder}/current_tasks.json
 ```
+
+**IPC file types:**
+- `messages/*.json` - Agent writes: outgoing WhatsApp messages
+- `tasks/*.json` - Agent writes: task operations (schedule, pause, resume, cancel, refresh_groups)
+- `current_tasks.json` - Host writes: read-only snapshot of scheduled tasks
+- `available_groups.json` - Host writes: read-only list of WhatsApp groups (main only)
 
 ## Quick Diagnostic Script
 
