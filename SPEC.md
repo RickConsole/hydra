@@ -164,12 +164,17 @@ nanoclaw/
 Configuration constants are in `src/config.ts`:
 
 ```typescript
+import path from 'path';
+
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
-export const STORE_DIR = './store';
-export const GROUPS_DIR = './groups';
-export const DATA_DIR = './data';
+
+// Paths are absolute (required for container mounts)
+const PROJECT_ROOT = process.cwd();
+export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
+export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
+export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 
 // Container configuration
 export const CONTAINER_IMAGE = process.env.CONTAINER_IMAGE || 'nanoclaw-agent:latest';
@@ -179,6 +184,8 @@ export const IPC_POLL_INTERVAL = 1000;
 export const TRIGGER_PATTERN = new RegExp(`^@${ASSISTANT_NAME}\\b`, 'i');
 export const CLEAR_COMMAND = '/clear';
 ```
+
+**Note:** Paths must be absolute for Apple Container volume mounts to work correctly.
 
 ### Container Configuration
 
@@ -489,6 +496,17 @@ Provides email capabilities. Requires Google Cloud OAuth setup.
 
 NanoClaw runs as a single macOS launchd service.
 
+### Startup Sequence
+
+When NanoClaw starts, it:
+1. **Ensures Apple Container system is running** - Automatically starts it if needed (survives reboots)
+2. Initializes the SQLite database
+3. Loads state (registered groups, sessions, router state)
+4. Connects to WhatsApp
+5. Starts the message polling loop
+6. Starts the scheduler loop
+7. Starts the IPC watcher for container messages
+
 ### Service: com.nanoclaw
 
 **launchd/com.nanoclaw.plist:**
@@ -601,9 +619,12 @@ chmod 700 groups/
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | No response to messages | Service not running | Check `launchctl list | grep nanoclaw` |
+| "Claude Code process exited with code 1" | Apple Container failed to start | Check logs; NanoClaw auto-starts container system but may fail |
+| "Claude Code process exited with code 1" | Session mount path wrong | Ensure mount is to `/home/node/.claude/` not `/root/.claude/` |
+| Session not continuing | Session ID not saved | Check `data/sessions.json` |
+| Session not continuing | Mount path mismatch | Container user is `node` with HOME=/home/node; sessions must be at `/home/node/.claude/` |
 | "QR code expired" | WhatsApp session expired | Delete store/auth/ and restart |
 | "No groups registered" | Haven't added groups | Use `@Andy add group "Name"` in main |
-| Session not continuing | Session ID not saved | Check `data/sessions.json` |
 
 ### Log Location
 

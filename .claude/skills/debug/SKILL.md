@@ -20,8 +20,11 @@ src/container-runner.ts               container/agent-runner/
     ├── data/env/env ──────────────> /workspace/env-dir/env
     ├── groups/{folder} ───────────> /workspace/group
     ├── data/ipc ──────────────────> /workspace/ipc
+    ├── ~/.claude/ ────────────────> /home/node/.claude/ (sessions)
     └── (main only) project root ──> /workspace/project
 ```
+
+**Important:** The container runs as user `node` with `HOME=/home/node`. Session files must be mounted to `/home/node/.claude/` (not `/root/.claude/`) for session resumption to work.
 
 ## Log Locations
 
@@ -131,7 +134,38 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
 
 All of `/workspace/` and `/app/` should be owned by `node`.
 
-### 5. MCP Server Failures
+### 5. Session Not Resuming / "Claude Code process exited with code 1"
+
+If sessions aren't being resumed (new session ID every time), or Claude Code exits with code 1 when resuming:
+
+**Root cause:** The SDK looks for sessions at `$HOME/.claude/projects/`. Inside the container, `HOME=/home/node`, so it looks at `/home/node/.claude/projects/`.
+
+**Check the mount path:**
+```bash
+# In container-runner.ts, verify mount is to /home/node/.claude/, NOT /root/.claude/
+grep -A3 "Claude sessions" src/container-runner.ts
+```
+
+**Verify sessions are accessible:**
+```bash
+container run --rm --entrypoint /bin/bash \
+  -v ~/.claude:/home/node/.claude \
+  nanoclaw-agent:latest -c '
+echo "HOME=$HOME"
+ls -la $HOME/.claude/projects/ 2>&1 | head -5
+'
+```
+
+**Fix:** Ensure `container-runner.ts` mounts to `/home/node/.claude/`:
+```typescript
+mounts.push({
+  hostPath: claudeDir,
+  containerPath: '/home/node/.claude',  // NOT /root/.claude
+  readonly: false
+});
+```
+
+### 6. MCP Server Failures
 
 If an MCP server fails to start, the agent may exit. Test MCP servers individually:
 
@@ -229,7 +263,14 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c '
 
 ## Session Persistence
 
-Claude sessions are stored in `~/.claude/` which is mounted into the container. To clear sessions:
+Claude sessions are stored in `~/.claude/projects/` on the host, mounted to `/home/node/.claude/projects/` inside the container.
+
+**Critical:** The mount path must match the container user's HOME directory:
+- Container user: `node`
+- Container HOME: `/home/node`
+- Mount target: `/home/node/.claude/` (NOT `/root/.claude/`)
+
+To clear sessions:
 
 ```bash
 # Clear all sessions
@@ -237,6 +278,15 @@ rm -rf ~/.claude/projects/
 
 # Clear sessions for a specific group
 rm -rf ~/.claude/projects/*workspace-group*/
+
+# Also clear the session ID from NanoClaw's tracking
+echo '{}' > data/sessions.json
+```
+
+To verify session resumption is working, check the logs for the same session ID across messages:
+```bash
+grep "Session initialized" logs/nanoclaw.log | tail -5
+# Should show the SAME session ID for consecutive messages in the same group
 ```
 
 ## IPC Debugging
@@ -267,15 +317,22 @@ echo -e "\n1. API Key configured?"
 echo -e "\n2. Env file copied for container?"
 [ -f data/env/env ] && echo "OK" || echo "MISSING - will be created on first run"
 
-echo -e "\n3. Container image exists?"
-container images 2>/dev/null | grep -q nanoclaw-agent && echo "OK" || echo "MISSING - run ./container/build.sh"
+echo -e "\n3. Apple Container system running?"
+container system status &>/dev/null && echo "OK" || echo "NOT RUNNING - NanoClaw should auto-start it; check logs"
 
-echo -e "\n4. Apple Container running?"
-container system info &>/dev/null && echo "OK" || echo "NOT RUNNING - run: container system start"
+echo -e "\n4. Container image exists?"
+echo '{}' | container run -i --entrypoint /bin/echo nanoclaw-agent:latest "OK" 2>/dev/null || echo "MISSING - run ./container/build.sh"
 
-echo -e "\n5. Groups directory?"
+echo -e "\n5. Session mount path correct?"
+grep -q "/home/node/.claude" src/container-runner.ts 2>/dev/null && echo "OK" || echo "WRONG - should mount to /home/node/.claude/, not /root/.claude/"
+
+echo -e "\n6. Groups directory?"
 ls -la groups/ 2>/dev/null || echo "MISSING - run setup"
 
-echo -e "\n6. Recent container logs?"
+echo -e "\n7. Recent container logs?"
 ls -t groups/*/logs/container-*.log 2>/dev/null | head -3 || echo "No container logs yet"
+
+echo -e "\n8. Session continuity working?"
+SESSIONS=$(grep "Session initialized" logs/nanoclaw.log 2>/dev/null | tail -5 | awk '{print $NF}' | sort -u | wc -l)
+[ "$SESSIONS" -le 2 ] && echo "OK (recent sessions reusing IDs)" || echo "CHECK - multiple different session IDs, may indicate resumption issues"
 ```

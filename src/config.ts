@@ -1,9 +1,14 @@
+import path from 'path';
+
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000; // Check for due tasks every minute
-export const STORE_DIR = './store';
-export const GROUPS_DIR = './groups';
-export const DATA_DIR = './data';
+
+// Use absolute paths for container mounts
+const PROJECT_ROOT = process.cwd();
+export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
+export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
+export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 export const MAIN_GROUP_FOLDER = 'main';
 
 // Container configuration

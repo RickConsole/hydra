@@ -80,11 +80,12 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
   }
 
   // Claude sessions directory (for session persistence)
+  // Container runs as 'node' user with HOME=/home/node
   const claudeDir = path.join(homeDir, '.claude');
   if (fs.existsSync(claudeDir)) {
     mounts.push({
       hostPath: claudeDir,
-      containerPath: '/root/.claude',
+      containerPath: '/home/node/.claude',
       readonly: false
     });
   }
@@ -94,7 +95,7 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
   if (fs.existsSync(gmailDir)) {
     mounts.push({
       hostPath: gmailDir,
-      containerPath: '/root/.gmail-mcp',
+      containerPath: '/home/node/.gmail-mcp',
       readonly: false
     });
   }

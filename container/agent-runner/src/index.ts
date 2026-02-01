@@ -111,12 +111,13 @@ async function main(): Promise<void> {
     });
 
   } catch (err) {
-    log(`Agent error: ${err instanceof Error ? err.message : String(err)}`);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    log(`Agent error: ${errorMessage}`);
     writeOutput({
       status: 'error',
       result: null,
       newSessionId,
-      error: err instanceof Error ? err.message : String(err)
+      error: errorMessage
     });
     process.exit(1);
   }

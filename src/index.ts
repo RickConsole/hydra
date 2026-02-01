@@ -5,7 +5,7 @@ import makeWASocket, {
   WASocket
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -376,7 +376,25 @@ async function startMessageLoop(): Promise<void> {
   }
 }
 
+function ensureContainerSystemRunning(): void {
+  try {
+    // Check if container system is already running
+    execSync('container system status', { stdio: 'pipe' });
+    logger.debug('Apple Container system already running');
+  } catch {
+    // Not running, try to start it
+    logger.info('Starting Apple Container system...');
+    try {
+      execSync('container system start', { stdio: 'pipe', timeout: 30000 });
+      logger.info('Apple Container system started');
+    } catch (err) {
+      logger.error({ err }, 'Failed to start Apple Container system - agents will not work');
+    }
+  }
+}
+
 async function main(): Promise<void> {
+  ensureContainerSystemRunning();
   initDatabase();
   logger.info('Database initialized');
   loadState();

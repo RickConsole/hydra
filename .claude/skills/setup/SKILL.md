@@ -33,9 +33,11 @@ If not installed, tell the user:
 Wait for user confirmation, then verify:
 
 ```bash
-container system start 2>/dev/null || true
+container system start
 container --version
 ```
+
+**Note:** NanoClaw automatically starts the Apple Container system when it launches, so you don't need to start it manually after reboots.
 
 ## 3. Configure API Key
 
@@ -267,6 +269,10 @@ The user should receive a response in WhatsApp.
 ## Troubleshooting
 
 **Service not starting**: Check `logs/nanoclaw.error.log`
+
+**Container agent fails with "Claude Code process exited with code 1"**:
+- Ensure Apple Container is running: `container system start`
+- Check container logs: `cat groups/main/logs/container-*.log | tail -50`
 
 **No response to messages**:
 - Verify the trigger pattern matches (e.g., `@AssistantName` at start of message)
