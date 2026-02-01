@@ -15,6 +15,7 @@ import {
   DATA_DIR
 } from './config.js';
 import { RegisteredGroup } from './types.js';
+import { validateAdditionalMounts } from './mount-security.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -151,22 +152,14 @@ function buildVolumeMounts(group: RegisteredGroup, isMain: boolean): VolumeMount
     }
   }
 
+  // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
-    for (const mount of group.containerConfig.additionalMounts) {
-      const hostPath = mount.hostPath.startsWith('~')
-        ? path.join(homeDir, mount.hostPath.slice(1))
-        : mount.hostPath;
-
-      if (fs.existsSync(hostPath)) {
-        mounts.push({
-          hostPath,
-          containerPath: `/workspace/extra/${mount.containerPath}`,
-          readonly: mount.readonly !== false // Default to readonly for safety
-        });
-      } else {
-        logger.warn({ hostPath }, 'Additional mount path does not exist, skipping');
-      }
-    }
+    const validatedMounts = validateAdditionalMounts(
+      group.containerConfig.additionalMounts,
+      group.name,
+      isMain
+    );
+    mounts.push(...validatedMounts);
   }
 
   return mounts;
