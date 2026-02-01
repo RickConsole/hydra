@@ -39,44 +39,50 @@ container --version
 
 **Note:** NanoClaw automatically starts the Apple Container system when it launches, so you don't need to start it manually after reboots.
 
-## 3. Configure API Key
+## 3. Configure Claude Authentication
 
 Ask the user:
-> Do you have an Anthropic API key configured elsewhere that I should copy, or should I create a `.env` file for you to fill in?
+> Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
 
-**If copying from another location:**
-```bash
-# Extract only the ANTHROPIC_API_KEY line from the source file
-grep "^ANTHROPIC_API_KEY=" /path/to/other/.env > .env
-```
+### Option 1: Claude Subscription (Recommended)
 
-Verify the key exists (only show first/last few chars for security):
+Ask the user:
+> Want me to grab the OAuth token from your current Claude session?
+
+If yes:
 ```bash
-KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
-if [ -n "$KEY" ]; then
-  echo "API key configured: ${KEY:0:10}...${KEY: -4}"
+TOKEN=$(cat ~/.claude/.credentials.json 2>/dev/null | jq -r '.claudeAiOauth.accessToken // empty')
+if [ -n "$TOKEN" ]; then
+  echo "CLAUDE_CODE_OAUTH_TOKEN=$TOKEN" > .env
+  echo "Token configured: ${TOKEN:0:20}...${TOKEN: -4}"
 else
-  echo "API key missing or invalid"
+  echo "No token found - are you logged in to Claude Code?"
 fi
 ```
 
-**If creating new:**
+If the token wasn't found, tell the user:
+> Run `claude` in another terminal and log in first, then come back here.
+
+### Option 2: API Key
+
+Ask if they have an existing key to copy or need to create one.
+
+**Copy existing:**
+```bash
+grep "^ANTHROPIC_API_KEY=" /path/to/source/.env > .env
+```
+
+**Create new:**
 ```bash
 echo 'ANTHROPIC_API_KEY=' > .env
 ```
 
-Tell the user:
-> I've created `.env` in the project root. Please add your Anthropic API key after the `=` sign.
-> You can get an API key from https://console.anthropic.com/
+Tell the user to add their key from https://console.anthropic.com/
 
-Wait for user confirmation, then verify (only show first/last few chars):
+**Verify:**
 ```bash
 KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
-if [ -n "$KEY" ]; then
-  echo "API key configured: ${KEY:0:10}...${KEY: -4}"
-else
-  echo "API key missing or invalid"
-fi
+[ -n "$KEY" ] && echo "API key configured: ${KEY:0:10}...${KEY: -4}" || echo "Missing"
 ```
 
 ## 4. Build Container Image

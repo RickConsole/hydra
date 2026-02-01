@@ -61,13 +61,15 @@ Debug level shows:
 
 Common causes:
 
-#### Missing API Key
+#### Missing Authentication
 ```
 Invalid API key · Please run /login
 ```
-**Fix:** Ensure `.env` file exists in project root with valid `ANTHROPIC_API_KEY`:
+**Fix:** Ensure `.env` file exists with either OAuth token or API key:
 ```bash
-cat .env  # Should show: ANTHROPIC_API_KEY=sk-ant-...
+cat .env  # Should show one of:
+# CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...  (subscription)
+# ANTHROPIC_API_KEY=sk-ant-api03-...        (pay-per-use)
 ```
 
 #### Root User Restriction
@@ -87,7 +89,7 @@ To verify env vars are reaching the container:
 echo '{}' | container run -i \
   --mount type=bind,source=$(pwd)/data/env,target=/workspace/env-dir,readonly \
   --entrypoint /bin/bash nanoclaw-agent:latest \
-  -c 'export $(cat /workspace/env-dir/env | xargs); echo "API key length: ${#ANTHROPIC_API_KEY}"'
+  -c 'export $(cat /workspace/env-dir/env | xargs); echo "OAuth: ${#CLAUDE_CODE_OAUTH_TOKEN} chars, API: ${#ANTHROPIC_API_KEY} chars"'
 ```
 
 ### 3. Mount Issues
@@ -111,7 +113,7 @@ container run --rm --entrypoint /bin/bash nanoclaw-agent:latest -c 'ls -la /work
 Expected structure:
 ```
 /workspace/
-├── env-dir/env     # Environment file (ANTHROPIC_API_KEY)
+├── env-dir/env     # Environment file (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)
 ├── group/          # Current group folder (cwd)
 ├── project/        # Project root (main channel only)
 ├── global/         # Global CLAUDE.md (non-main only)
@@ -311,8 +313,8 @@ Run this to check common issues:
 ```bash
 echo "=== Checking NanoClaw Container Setup ==="
 
-echo -e "\n1. API Key configured?"
-[ -f .env ] && grep -q "ANTHROPIC_API_KEY=sk-" .env && echo "OK" || echo "MISSING - create .env with ANTHROPIC_API_KEY"
+echo -e "\n1. Authentication configured?"
+[ -f .env ] && (grep -q "CLAUDE_CODE_OAUTH_TOKEN=sk-" .env || grep -q "ANTHROPIC_API_KEY=sk-" .env) && echo "OK" || echo "MISSING - add CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY to .env"
 
 echo -e "\n2. Env file copied for container?"
 [ -f data/env/env ] && echo "OK" || echo "MISSING - will be created on first run"

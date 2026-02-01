@@ -216,15 +216,22 @@ Additional mounts appear at `/workspace/extra/{containerPath}` inside the contai
 
 **Apple Container mount syntax note:** Read-write mounts use `-v host:container`, but readonly mounts require `--mount "type=bind,source=...,target=...,readonly"` (the `:ro` suffix doesn't work).
 
-### API Key Configuration
+### Claude Authentication
 
-The Anthropic API key must be in a `.env` file in the project root:
+Configure authentication in a `.env` file in the project root. Two options:
 
+**Option 1: Claude Subscription (OAuth token)**
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...
+```
+The token can be extracted from `~/.claude/.credentials.json` if you're logged in to Claude Code.
+
+**Option 2: Pay-per-use API Key**
+```bash
+ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
-This file is automatically mounted into the container at `/workspace/env-dir/env` and sourced by the entrypoint script. This workaround is needed because Apple Container loses `-e` environment variables when using `-i` (interactive mode with piped stdin).
+The `.env` file is automatically mounted into the container at `/workspace/env-dir/env` and sourced by the entrypoint script. This workaround is needed because Apple Container loses `-e` environment variables when using `-i` (interactive mode with piped stdin).
 
 ### Changing the Assistant Name
 
