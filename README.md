@@ -12,6 +12,16 @@
 
 NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes (with Claude Code explaining it). One Node.js process. A handful of files. Agents run in actual containers, not behind application-level permissions.
 
+## Quick Start
+
+```bash
+git clone https://github.com/anthropics/nanoclaw.git
+cd nanoclaw
+claude
+```
+
+Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
+
 ## Philosophy
 
 **Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers. Have Claude Code walk you through it.
@@ -29,16 +39,6 @@ NanoClaw gives you the same core functionality in a codebase you can understand 
 **Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters. A bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is (IMO) the best harness available.
 
 **No ToS gray areas.** Because it uses Claude Agent SDK natively with no hacks or workarounds, using your subscription with your auth token is completely legitimate (I think). No risk of being shut down for terms of service violations (I am not a lawyer).
-
-## Quick Start
-
-```bash
-git clone https://github.com/anthropics/nanoclaw.git
-cd nanoclaw
-claude
-```
-
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
 
 ## What You Get
 
