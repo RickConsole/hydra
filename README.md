@@ -4,13 +4,13 @@ A personal Claude assistant. Lightweight, secure, and built to be understood and
 
 ## Why This Exists
 
-This is the anti-[OpenClaw](https://github.com/anthropics/openclaw). That project became a monstrosity - multiple processes, endless configuration, endless integrations, security nightmares with leaky permission systems. It's impossible for anyone to actually understand the whole thing.
+[OpenClaw](https://github.com/anthropics/openclaw) is an impressive project with a great vision - they built something genuinely useful that many people rely on. But from the moment I installed it, I haven't slept well at night. I have no idea how it works, and no realistic chance of ever understanding the codebase. Multiple processes, endless configuration, layers of abstraction - it's a black box I'm trusting with access to my life.
 
-NanoClaw gives you the same core functionality in a codebase you can read in an afternoon. One Node.js process. A handful of files. Agents run in actual containers, not behind leaky application-level permissions.
+NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes (with Claude Code explaining it). One Node.js process. A handful of files. Agents run in actual containers, not behind application-level permissions.
 
 ## Philosophy
 
-**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers.
+**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers. Have Claude Code walk you through it.
 
 **Secure by isolation.** Agents run in Linux containers (Apple Container). They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your Mac.
 
@@ -22,7 +22,7 @@ NanoClaw gives you the same core functionality in a codebase you can read in an 
 
 **Skills over features.** Contributors don't add "Telegram alongside WhatsApp." They contribute skills like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
 
-**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters - a bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is the best harness available. OpenClaw runs on Pi; this runs the real thing.
+**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters - a bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is the best harness available.
 
 **No ToS gray areas.** Because it uses Claude Agent SDK natively with no hacks or workarounds, using your subscription with your auth token is completely legitimate. No risk of being shut down for terms of service violations (I am not a lawyer).
 
@@ -146,7 +146,7 @@ Yes. Run Claude Code and say "make this run on Linux." Half an hour of back-and-
 
 **Is this secure?**
 
-More secure than OpenClaw. Agents run in actual Linux VMs, not behind application-level permission checks. They can only access explicitly mounted directories. But you should still review what you're running - the codebase is small enough to read.
+Agents run in actual Linux VMs, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running - but the codebase is small enough that you actually can.
 
 **Why no configuration files?**
 
