@@ -20,8 +20,9 @@ import {
 } from './config.js';
 import { RegisteredGroup, Session, NewMessage } from './types.js';
 import { initDatabase, storeMessage, storeChatMetadata, getNewMessages, getMessagesSince, getAllTasks, getTaskById } from './db.js';
-import { startSchedulerLoop } from './scheduler.js';
+import { startSchedulerLoop } from './task-scheduler.js';
 import { runContainerAgent, writeTasksSnapshot } from './container-runner.js';
+import { loadJson, saveJson } from './utils.js';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -40,22 +41,6 @@ async function setTyping(jid: string, isTyping: boolean): Promise<void> {
   } catch (err) {
     logger.debug({ jid, err }, 'Failed to update typing status');
   }
-}
-
-function loadJson<T>(filePath: string, defaultValue: T): T {
-  try {
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    }
-  } catch (e) {
-    logger.warn({ filePath, error: e }, 'Failed to load JSON file');
-  }
-  return defaultValue;
-}
-
-function saveJson(filePath: string, data: unknown): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 function loadState(): void {

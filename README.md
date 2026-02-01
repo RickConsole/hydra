@@ -120,7 +120,7 @@ Single Node.js process. Agents execute in isolated Linux containers with mounted
 Key files:
 - `src/index.ts` - Main app: WhatsApp connection, routing, IPC
 - `src/container-runner.ts` - Spawns agent containers
-- `src/scheduler.ts` - Runs scheduled tasks
+- `src/task-scheduler.ts` - Runs scheduled tasks
 - `src/db.ts` - SQLite operations
 - `groups/*/CLAUDE.md` - Per-group memory
 

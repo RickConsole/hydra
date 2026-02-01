@@ -22,7 +22,7 @@ This skill helps users add capabilities or modify behavior. Use AskUserQuestion 
 | `src/index.ts` | Message routing, WhatsApp connection, agent invocation |
 | `src/db.ts` | Database initialization and queries |
 | `src/types.ts` | TypeScript interfaces |
-| `src/auth.ts` | Standalone WhatsApp authentication script |
+| `src/whatsapp-auth.ts` | Standalone WhatsApp authentication script |
 | `.mcp.json` | MCP server configuration (reference) |
 | `groups/CLAUDE.md` | Global memory/persona |
 

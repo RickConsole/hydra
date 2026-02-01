@@ -98,9 +98,10 @@ nanoclaw/
 │   ├── index.ts                   # Main application (WhatsApp + routing)
 │   ├── config.ts                  # Configuration constants
 │   ├── types.ts                   # TypeScript interfaces
+│   ├── utils.ts                   # Generic utility functions
 │   ├── db.ts                      # Database initialization and queries
-│   ├── auth.ts                    # Standalone WhatsApp authentication
-│   ├── scheduler.ts               # Scheduler loop (runs due tasks)
+│   ├── whatsapp-auth.ts           # Standalone WhatsApp authentication
+│   ├── task-scheduler.ts          # Runs scheduled tasks when due
 │   └── container-runner.ts        # Spawns agents in Apple Containers
 │
 ├── container/

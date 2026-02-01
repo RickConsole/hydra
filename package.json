@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "auth": "tsx src/auth.ts",
+    "auth": "tsx src/whatsapp-auth.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },

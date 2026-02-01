@@ -4,7 +4,7 @@
  * Run this during setup to authenticate with WhatsApp.
  * Displays QR code, waits for scan, saves credentials, then exits.
  *
- * Usage: npx tsx src/auth.ts
+ * Usage: npx tsx src/whatsapp-auth.ts
  */
 
 import makeWASocket, {
