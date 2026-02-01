@@ -78,7 +78,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 | Container Runtime | Apple Container | Isolated Linux VMs for agent execution |
 | Agent | @anthropic-ai/claude-agent-sdk (0.2.29) | Run Claude with tools and MCP servers |
 | Browser Automation | agent-browser + Chromium | Web interaction and screenshots |
-| Runtime | Node.js 22+ | Host process for routing and scheduling |
+| Runtime | Node.js 20+ | Host process for routing and scheduling |
 
 ---
 

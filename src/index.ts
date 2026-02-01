@@ -546,7 +546,16 @@ function ensureContainerSystemRunning(): void {
       execSync('container system start', { stdio: 'pipe', timeout: 30000 });
       logger.info('Apple Container system started');
     } catch (err) {
-      logger.error({ err }, 'Failed to start Apple Container system - agents will not work');
+      logger.error({ err }, 'Failed to start Apple Container system');
+      console.error('\n╔════════════════════════════════════════════════════════════════╗');
+      console.error('║  FATAL: Apple Container system failed to start                 ║');
+      console.error('║                                                                ║');
+      console.error('║  Agents cannot run without Apple Container. To fix:           ║');
+      console.error('║  1. Install from: https://github.com/apple/container/releases ║');
+      console.error('║  2. Run: container system start                               ║');
+      console.error('║  3. Restart NanoClaw                                          ║');
+      console.error('╚════════════════════════════════════════════════════════════════╝\n');
+      throw new Error('Apple Container system is required but failed to start');
     }
   }
 }

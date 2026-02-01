@@ -315,16 +315,14 @@ This will open a browser for OAuth consent. After authorization, credentials are
 
 ## 10. Configure launchd Service
 
-Get the actual paths:
+Generate the plist file with correct paths automatically:
 
 ```bash
-which node
-pwd
-```
+NODE_PATH=$(which node)
+PROJECT_PATH=$(pwd)
+HOME_PATH=$HOME
 
-Create the plist file at `~/Library/LaunchAgents/com.nanoclaw.plist`:
-
-```xml
+cat > ~/Library/LaunchAgents/com.nanoclaw.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -333,11 +331,11 @@ Create the plist file at `~/Library/LaunchAgents/com.nanoclaw.plist`:
     <string>com.nanoclaw</string>
     <key>ProgramArguments</key>
     <array>
-        <string>NODE_PATH_HERE</string>
-        <string>PROJECT_PATH_HERE/dist/index.js</string>
+        <string>${NODE_PATH}</string>
+        <string>${PROJECT_PATH}/dist/index.js</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>PROJECT_PATH_HERE</string>
+    <string>${PROJECT_PATH}</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -345,19 +343,22 @@ Create the plist file at `~/Library/LaunchAgents/com.nanoclaw.plist`:
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:HOME_PATH_HERE/.local/bin</string>
+        <string>/usr/local/bin:/usr/bin:/bin:${HOME_PATH}/.local/bin</string>
         <key>HOME</key>
-        <string>HOME_PATH_HERE</string>
+        <string>${HOME_PATH}</string>
     </dict>
     <key>StandardOutPath</key>
-    <string>PROJECT_PATH_HERE/logs/nanoclaw.log</string>
+    <string>${PROJECT_PATH}/logs/nanoclaw.log</string>
     <key>StandardErrorPath</key>
-    <string>PROJECT_PATH_HERE/logs/nanoclaw.error.log</string>
+    <string>${PROJECT_PATH}/logs/nanoclaw.error.log</string>
 </dict>
 </plist>
-```
+EOF
 
-Replace the placeholders with actual paths from the commands above.
+echo "Created launchd plist with:"
+echo "  Node: ${NODE_PATH}"
+echo "  Project: ${PROJECT_PATH}"
+```
 
 Build and start the service:
 
