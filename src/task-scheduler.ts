@@ -40,9 +40,10 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
     return;
   }
 
-  // Update tasks snapshot for container to read
+  // Update tasks snapshot for container to read (filtered by group)
+  const isMain = task.group_folder === MAIN_GROUP_FOLDER;
   const tasks = getAllTasks();
-  writeTasksSnapshot(tasks.map(t => ({
+  writeTasksSnapshot(task.group_folder, isMain, tasks.map(t => ({
     id: t.id,
     groupFolder: t.group_folder,
     prompt: t.prompt,
@@ -56,7 +57,6 @@ async function runTask(task: ScheduledTask, deps: SchedulerDependencies): Promis
   let error: string | null = null;
 
   try {
-    const isMain = task.group_folder === MAIN_GROUP_FOLDER;
     const output = await runContainerAgent(group, {
       prompt: task.prompt,
       groupFolder: task.group_folder,
