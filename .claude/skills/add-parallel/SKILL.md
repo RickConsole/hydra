@@ -74,7 +74,7 @@ const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
 
 Replace with:
 ```typescript
-const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'PARALLEL_API_KEY', 'ASSISTANT_NAME'];
+const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'PARALLEL_API_KEY'];
 ```
 
 ### 4. Configure MCP Servers in Agent Runner
@@ -265,7 +265,7 @@ Check logs to verify MCP servers loaded:
 tail -20 logs/nanoclaw.log
 ```
 
-Look for: `[agent-runner] Parallel AI MCP servers configured`
+Look for: `Parallel AI MCP servers configured`
 
 ## Troubleshooting
 
