@@ -80,22 +80,20 @@ Ask the user:
 
 ### Option 1: Claude Subscription (Recommended)
 
-Ask the user:
-> Want me to grab the OAuth token from your current Claude session?
+Tell the user:
+> Open another terminal window and run:
+> ```
+> claude setup-token
+> ```
+> A browser window will open for you to log in. Once authenticated, the token will be displayed in your terminal. Either:
+> 1. Paste it here and I'll add it to `.env` for you, or
+> 2. Add it to `.env` yourself as `CLAUDE_CODE_OAUTH_TOKEN=<your-token>`
 
-If yes:
+If they give you the token, add it to `.env`:
+
 ```bash
-TOKEN=$(cat ~/.claude/.credentials.json 2>/dev/null | jq -r '.claudeAiOauth.accessToken // empty')
-if [ -n "$TOKEN" ]; then
-  echo "CLAUDE_CODE_OAUTH_TOKEN=$TOKEN" > .env
-  echo "Token configured: ${TOKEN:0:20}...${TOKEN: -4}"
-else
-  echo "No token found - are you logged in to Claude Code?"
-fi
+echo "CLAUDE_CODE_OAUTH_TOKEN=<token>" > .env
 ```
-
-If the token wasn't found, tell the user:
-> Run `claude` in another terminal and log in first, then come back here.
 
 ### Option 2: API Key
 
