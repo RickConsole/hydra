@@ -1,7 +1,7 @@
 export interface AdditionalMount {
-  hostPath: string;      // Absolute path on host (supports ~ for home)
+  hostPath: string; // Absolute path on host (supports ~ for home)
   containerPath: string; // Path inside container (under /workspace/extra/)
-  readonly?: boolean;    // Default: true for safety
+  readonly?: boolean; // Default: true for safety
 }
 
 /**
@@ -29,7 +29,7 @@ export interface AllowedRoot {
 
 export interface ContainerConfig {
   additionalMounts?: AdditionalMount[];
-  timeout?: number;  // Default: 300000 (5 minutes)
+  timeout?: number; // Default: 300000 (5 minutes)
   env?: Record<string, string>;
 }
 
