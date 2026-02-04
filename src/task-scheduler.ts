@@ -141,7 +141,14 @@ async function runTask(
   updateTaskAfterRun(task.id, nextRun, resultSummary);
 }
 
+let schedulerRunning = false;
+
 export function startSchedulerLoop(deps: SchedulerDependencies): void {
+  if (schedulerRunning) {
+    logger.debug('Scheduler loop already running, skipping duplicate start');
+    return;
+  }
+  schedulerRunning = true;
   logger.info('Scheduler loop started');
 
   const loop = async () => {

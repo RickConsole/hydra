@@ -52,6 +52,10 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 // LID to phone number mapping (WhatsApp now sends LID JIDs for self-chats)
 let lidToPhoneMap: Record<string, string> = {};
+// Guards to prevent duplicate loops on WhatsApp reconnect
+let messageLoopRunning = false;
+let ipcWatcherRunning = false;
+let groupSyncTimerStarted = false;
 
 /**
  * Translate a JID from LID format to phone format if we have a mapping.
@@ -292,6 +296,12 @@ async function sendMessage(jid: string, text: string): Promise<void> {
 }
 
 function startIpcWatcher(): void {
+  if (ipcWatcherRunning) {
+    logger.debug('IPC watcher already running, skipping duplicate start');
+    return;
+  }
+  ipcWatcherRunning = true;
+
   const ipcBaseDir = path.join(DATA_DIR, 'ipc');
   fs.mkdirSync(ipcBaseDir, { recursive: true });
 
@@ -697,12 +707,15 @@ async function connectWhatsApp(): Promise<void> {
       syncGroupMetadata().catch((err) =>
         logger.error({ err }, 'Initial group sync failed'),
       );
-      // Set up daily sync timer
-      setInterval(() => {
-        syncGroupMetadata().catch((err) =>
-          logger.error({ err }, 'Periodic group sync failed'),
-        );
-      }, GROUP_SYNC_INTERVAL_MS);
+      // Set up daily sync timer (only once)
+      if (!groupSyncTimerStarted) {
+        groupSyncTimerStarted = true;
+        setInterval(() => {
+          syncGroupMetadata().catch((err) =>
+            logger.error({ err }, 'Periodic group sync failed'),
+          );
+        }, GROUP_SYNC_INTERVAL_MS);
+      }
       startSchedulerLoop({
         sendMessage,
         registeredGroups: () => registeredGroups,
@@ -745,6 +758,11 @@ async function connectWhatsApp(): Promise<void> {
 }
 
 async function startMessageLoop(): Promise<void> {
+  if (messageLoopRunning) {
+    logger.debug('Message loop already running, skipping duplicate start');
+    return;
+  }
+  messageLoopRunning = true;
   logger.info(`NanoClaw running (trigger: @${ASSISTANT_NAME})`);
 
   while (true) {
