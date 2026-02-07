@@ -1,6 +1,8 @@
+import fs from 'fs';
 import path from 'path';
 
-export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || 'Andy';
+import { BotRegistry } from './types.js';
+
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
 
@@ -36,12 +38,101 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export const TRIGGER_PATTERN = new RegExp(
-  `^@${escapeRegex(ASSISTANT_NAME)}\\b`,
-  'i',
-);
+export function getTriggerPattern(botName: string): RegExp {
+  return new RegExp(`^@${escapeRegex(botName)}\\b`, 'i');
+}
 
 // Timezone for scheduled tasks (cron expressions, etc.)
 // Uses system timezone by default
 export const TIMEZONE =
   process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/**
+ * Load bot registry from data/bots.json, falling back to env vars for backward compat.
+ * If bots.json doesn't exist but TELEGRAM_BOT_TOKEN is set, creates bots.json automatically.
+ */
+export function loadBotRegistry(): BotRegistry {
+  const botsPath = path.join(DATA_DIR, 'bots.json');
+
+  if (fs.existsSync(botsPath)) {
+    return JSON.parse(fs.readFileSync(botsPath, 'utf-8')) as BotRegistry;
+  }
+
+  // Backward compat: create from env vars
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    throw new Error(
+      'No bot configuration found. Create data/bots.json or set TELEGRAM_BOT_TOKEN env var.',
+    );
+  }
+
+  const name = process.env.ASSISTANT_NAME || 'Andy';
+  const key = name.toLowerCase();
+  const registry: BotRegistry = {
+    [key]: { token, name },
+  };
+
+  // Persist so future starts use bots.json
+  fs.mkdirSync(path.dirname(botsPath), { recursive: true });
+  fs.writeFileSync(botsPath, JSON.stringify(registry, null, 2));
+
+  return registry;
+}
+
+/**
+ * Parse a telegram JID into its components.
+ * New format: telegram:BOTKEY:CHATID
+ * Old format: telegram:CHATID (returns null botKey)
+ */
+export function parseTelegramJid(jid: string): { botKey: string; chatId: string } | null {
+  if (!jid.startsWith('telegram:')) return null;
+  const parts = jid.split(':');
+  if (parts.length === 3) {
+    return { botKey: parts[1], chatId: parts[2] };
+  }
+  // Old format — shouldn't happen after migration but handle gracefully
+  if (parts.length === 2) {
+    return { botKey: '', chatId: parts[1] };
+  }
+  return null;
+}
+
+export function buildTelegramJid(botKey: string, chatId: string): string {
+  return `telegram:${botKey}:${chatId}`;
+}
+
+// Voice calling configuration
+export const VOICE_ENABLED = process.env.VOICE_ENABLED === 'true';
+export const VOICE_PORT = parseInt(process.env.VOICE_PORT || '3340', 10);
+export const VOICE_GROUP = process.env.VOICE_GROUP || 'main';
+export const VOICE_ALLOWED_CALLERS = (process.env.VOICE_ALLOWED_CALLERS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+export const VOICE_GREETING = process.env.VOICE_GREETING || "Hey Rick, what's up?";
+export const VOICE_MAX_DURATION = parseInt(process.env.VOICE_MAX_DURATION || '600000', 10);
+export const VOICE_AUDIO_DIR = path.resolve(DATA_DIR, 'voice-audio');
+
+export const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+export const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+export const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '';
+
+export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
+export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb';
+export const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_turbo_v2_5';
+
+export const NGROK_AUTHTOKEN = process.env.NGROK_AUTHTOKEN || '';
+export const NGROK_DOMAIN = process.env.NGROK_DOMAIN || '';
+
+export function parseVoiceJid(jid: string): { callSid: string } | null {
+  if (!jid.startsWith('voice:twilio:')) return null;
+  const parts = jid.split(':');
+  if (parts.length === 3) {
+    return { callSid: parts[2] };
+  }
+  return null;
+}
+
+export function buildVoiceJid(callSid: string): string {
+  return `voice:twilio:${callSid}`;
+}

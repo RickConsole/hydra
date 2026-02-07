@@ -1,3 +1,10 @@
+export interface BotConfig {
+  token: string;
+  name: string; // Display name + trigger name (@Name)
+}
+
+export type BotRegistry = Record<string, BotConfig>; // key → config
+
 export interface AdditionalMount {
   hostPath: string; // Absolute path on host (supports ~ for home)
   containerPath: string; // Path inside container (under /workspace/extra/)
@@ -31,6 +38,7 @@ export interface ContainerConfig {
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
   env?: Record<string, string>;
+  allowedEnvVars?: string[]; // Additional .env keys this group can access (beyond base auth vars)
 }
 
 export interface RegisteredGroup {
@@ -76,4 +84,18 @@ export interface TaskRunLog {
   status: 'success' | 'error';
   result: string | null;
   error: string | null;
+}
+
+// Voice calling types
+export type VoiceCallState = 'greeting' | 'gathering' | 'processing' | 'ended';
+
+export interface ActiveCall {
+  callSid: string;
+  callerNumber: string;
+  state: VoiceCallState;
+  startedAt: number;
+  lastActivity: number;
+  // Queued response from agent, ready to be played
+  pendingResponse?: string; // path to MP3 file
+  pendingResponseText?: string; // text for logging
 }

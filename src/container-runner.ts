@@ -1,8 +1,8 @@
 /**
  * Container Runner for NanoClaw
- * Spawns agent execution in Apple Container and handles IPC
+ * Spawns agent execution in Docker or Apple Container and handles IPC
  */
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -21,6 +21,92 @@ import { RegisteredGroup } from './types.js';
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+
+// Shared credentials source of truth
+const SOURCE_CREDENTIALS = path.join(
+  process.env.HOME || os.homedir(),
+  '.claude',
+  '.credentials.json',
+);
+
+/**
+ * Copy credentials from ~/.claude/ to the group's session dir before spawning.
+ * Ensures every container starts with the freshest available token.
+ */
+function copyCredentialsToGroup(groupSessionsDir: string): void {
+  try {
+    if (!fs.existsSync(SOURCE_CREDENTIALS)) return;
+    const dest = path.join(groupSessionsDir, '.credentials.json');
+    fs.copyFileSync(SOURCE_CREDENTIALS, dest);
+    logger.debug({ dest }, 'Copied shared credentials to group session');
+  } catch (err) {
+    logger.warn({ err }, 'Failed to copy credentials to group session');
+  }
+}
+
+/**
+ * After container exits, write back credentials to ~/.claude/ if the group's
+ * copy has a newer expiresAt. This ensures token refreshes propagate back.
+ */
+function writeBackCredentialsIfNewer(groupSessionsDir: string): void {
+  try {
+    const groupCreds = path.join(groupSessionsDir, '.credentials.json');
+    if (!fs.existsSync(groupCreds)) return;
+
+    const groupData = JSON.parse(fs.readFileSync(groupCreds, 'utf-8'));
+    const groupExpiry = groupData?.claudeAiOauth?.expiresAt ?? 0;
+
+    let sourceExpiry = 0;
+    if (fs.existsSync(SOURCE_CREDENTIALS)) {
+      const sourceData = JSON.parse(
+        fs.readFileSync(SOURCE_CREDENTIALS, 'utf-8'),
+      );
+      sourceExpiry = sourceData?.claudeAiOauth?.expiresAt ?? 0;
+    }
+
+    if (groupExpiry > sourceExpiry) {
+      fs.copyFileSync(groupCreds, SOURCE_CREDENTIALS);
+      logger.info(
+        { groupExpiry, sourceExpiry },
+        'Wrote back fresher credentials from container',
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to write back credentials');
+  }
+}
+
+// Detect container runtime (Docker or Apple Container)
+function detectContainerRuntime(): 'docker' | 'container' {
+  // Check for Docker first (prefer Docker on Linux)
+  try {
+    // Check if docker command exists and daemon is accessible
+    // Use 'docker version' which works even with limited permissions
+    execSync('docker version --format "{{.Server.Version}}"', {
+      stdio: 'ignore',
+    });
+    return 'docker';
+  } catch {
+    // Docker not available or not running, try Apple Container
+    try {
+      execSync('container --version', { stdio: 'ignore' });
+      return 'container';
+    } catch {
+      // Last resort: check if docker binary exists (user may have group perms at runtime)
+      try {
+        execSync('which docker', { stdio: 'ignore' });
+        return 'docker';
+      } catch {
+        throw new Error(
+          'No container runtime found. Install Docker or Apple Container.',
+        );
+      }
+    }
+  }
+}
+
+const CONTAINER_RUNTIME = detectContainerRuntime();
+logger.info({ runtime: CONTAINER_RUNTIME }, 'Container runtime detected');
 
 function getHomeDir(): string {
   const home = process.env.HOME || os.homedir();
@@ -123,24 +209,36 @@ function buildVolumeMounts(
   });
 
   // Environment file directory (workaround for Apple Container -i env var bug)
-  // Only expose specific auth variables needed by Claude Code, not the entire .env
-  const envDir = path.join(DATA_DIR, 'env');
+  // Base vars always pass through; additional vars require group opt-in via allowedEnvVars
+  const baseVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'MEM0_API_KEY'];
+  const groupEnvVars = group.containerConfig?.allowedEnvVars ?? [];
+  const allowedVars = [...baseVars, ...groupEnvVars];
+
+  const envDir = path.join(DATA_DIR, 'env', group.folder);
   fs.mkdirSync(envDir, { recursive: true });
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
     const envContent = fs.readFileSync(envFile, 'utf-8');
-    const allowedVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'];
-    const filteredLines = envContent.split('\n').filter((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) return false;
-      return allowedVars.some((v) => trimmed.startsWith(`${v}=`));
-    });
+    const quotedLines: string[] = [];
 
-    if (filteredLines.length > 0) {
-      fs.writeFileSync(
-        path.join(envDir, 'env'),
-        filteredLines.join('\n') + '\n',
-      );
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+
+      const varName = trimmed.slice(0, eqIdx);
+      const varValue = trimmed.slice(eqIdx + 1);
+
+      if (allowedVars.includes(varName)) {
+        // Quote values to handle special chars like # in OAuth tokens
+        quotedLines.push(`${varName}='${varValue.replace(/'/g, "'\\''")}'`);
+      }
+    }
+
+    if (quotedLines.length > 0) {
+      fs.writeFileSync(path.join(envDir, 'env'), quotedLines.join('\n') + '\n');
       mounts.push({
         hostPath: envDir,
         containerPath: '/workspace/env-dir',
@@ -165,15 +263,21 @@ function buildVolumeMounts(
 function buildContainerArgs(mounts: VolumeMount[]): string[] {
   const args: string[] = ['run', '-i', '--rm'];
 
-  // Apple Container: --mount for readonly, -v for read-write
   for (const mount of mounts) {
-    if (mount.readonly) {
-      args.push(
-        '--mount',
-        `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`,
-      );
+    if (CONTAINER_RUNTIME === 'docker') {
+      // Docker: use --mount for both readonly and read-write
+      const mountOpts = `type=bind,source=${mount.hostPath},target=${mount.containerPath}${mount.readonly ? ',readonly' : ''}`;
+      args.push('--mount', mountOpts);
     } else {
-      args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
+      // Apple Container: --mount for readonly, -v for read-write
+      if (mount.readonly) {
+        args.push(
+          '--mount',
+          `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`,
+        );
+      } else {
+        args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
+      }
     }
   }
 
@@ -218,8 +322,12 @@ export async function runContainerAgent(
   const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
   fs.mkdirSync(logsDir, { recursive: true });
 
+  // Sync shared credentials into this group's session before spawning
+  const groupSessionsDir = path.join(DATA_DIR, 'sessions', group.folder, '.claude');
+  copyCredentialsToGroup(groupSessionsDir);
+
   return new Promise((resolve) => {
-    const container = spawn('container', containerArgs, {
+    const container = spawn(CONTAINER_RUNTIME, containerArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -280,6 +388,9 @@ export async function runContainerAgent(
     container.on('close', (code) => {
       clearTimeout(timeout);
       const duration = Date.now() - startTime;
+
+      // Write back credentials if the container refreshed the token
+      writeBackCredentialsIfNewer(groupSessionsDir);
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const logFile = path.join(logsDir, `container-${timestamp}.log`);

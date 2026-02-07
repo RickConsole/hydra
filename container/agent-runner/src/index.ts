@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { query, HookCallback, PreCompactHookInput } from '@anthropic-ai/claude-agent-sdk';
 import { createIpcMcp } from './ipc-mcp.js';
+import { createMem0Mcp } from './mem0-mcp.js';
 
 interface ContainerInput {
   prompt: string;
@@ -222,6 +223,9 @@ async function main(): Promise<void> {
     isMain: input.isMain
   });
 
+  const mem0ApiKey = process.env.MEM0_API_KEY;
+  const mem0Mcp = mem0ApiKey ? createMem0Mcp({ apiKey: mem0ApiKey, groupFolder: input.groupFolder }) : null;
+
   let result: string | null = null;
   let newSessionId: string | undefined;
 
@@ -243,13 +247,15 @@ async function main(): Promise<void> {
           'Bash',
           'Read', 'Write', 'Edit', 'Glob', 'Grep',
           'WebSearch', 'WebFetch',
-          'mcp__nanoclaw__*'
+          'mcp__nanoclaw__*',
+          ...(mem0Mcp ? ['mcp__mem0__*'] : [])
         ],
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         settingSources: ['project'],
         mcpServers: {
-          nanoclaw: ipcMcp
+          nanoclaw: ipcMcp,
+          ...(mem0Mcp ? { mem0: mem0Mcp } : {})
         },
         hooks: {
           PreCompact: [{ hooks: [createPreCompactHook()] }]

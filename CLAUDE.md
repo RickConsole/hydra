@@ -4,7 +4,7 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process that connects to WhatsApp, routes messages to Claude Agent SDK running in Apple Container (Linux VMs). Each group has isolated filesystem and memory.
+Single Node.js process that connects to WhatsApp, routes messages to Claude Agent SDK running in Docker containers. Each group has isolated filesystem and memory. Host OS is Linux.
 
 ## Key Files
 
@@ -37,6 +37,9 @@ npm run build        # Compile TypeScript
 
 Service management:
 ```bash
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+sudo systemctl start nanoclaw    # Start service
+sudo systemctl stop nanoclaw     # Stop service
+sudo systemctl restart nanoclaw  # Restart service
+sudo systemctl status nanoclaw   # Check status
+journalctl -u nanoclaw -f        # Follow logs
 ```

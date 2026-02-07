@@ -8,6 +8,8 @@ dist/
 store/
 data/
 logs/
+groups/*/logs/
+groups/*/conversations/
 
 # Secrets
 *.keys.json

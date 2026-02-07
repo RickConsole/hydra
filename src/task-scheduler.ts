@@ -143,15 +143,19 @@ async function runTask(
 
 let schedulerRunning = false;
 
-export function startSchedulerLoop(deps: SchedulerDependencies): void {
+export function startSchedulerLoop(deps: SchedulerDependencies): () => void {
   if (schedulerRunning) {
     logger.debug('Scheduler loop already running, skipping duplicate start');
-    return;
+    return () => {};
   }
   schedulerRunning = true;
   logger.info('Scheduler loop started');
 
+  let stopRequested = false;
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+
   const loop = async () => {
+    if (stopRequested) return;
     try {
       const dueTasks = getDueTasks();
       if (dueTasks.length > 0) {
@@ -171,8 +175,13 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
       logger.error({ err }, 'Error in scheduler loop');
     }
 
-    setTimeout(loop, SCHEDULER_POLL_INTERVAL);
+    if (!stopRequested) timerId = setTimeout(loop, SCHEDULER_POLL_INTERVAL);
   };
 
   loop();
+
+  return () => {
+    stopRequested = true;
+    if (timerId) clearTimeout(timerId);
+  };
 }

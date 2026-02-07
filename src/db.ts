@@ -5,6 +5,7 @@ import path from 'path';
 import { proto } from '@whiskeysockets/baileys';
 
 import { STORE_DIR } from './config.js';
+import { logger } from './logger.js';
 import { NewMessage, ScheduledTask, TaskRunLog } from './types.js';
 
 let db: Database.Database;
@@ -393,4 +394,39 @@ export function getTaskRunLogs(taskId: string, limit = 10): TaskRunLog[] {
   `,
     )
     .all(taskId, limit) as TaskRunLog[];
+}
+
+/**
+ * Migrate old-format telegram JIDs (telegram:CHATID) to new format (telegram:BOTKEY:CHATID).
+ * Idempotent — only updates JIDs that have exactly 2 colon-separated parts.
+ */
+export function migrateTelegramJids(defaultBotKey: string): void {
+  const oldChats = db
+    .prepare(`SELECT jid FROM chats WHERE jid LIKE 'telegram:%'`)
+    .all() as { jid: string }[];
+
+  let migrated = 0;
+  const migrateJid = db.prepare(`UPDATE chats SET jid = ? WHERE jid = ?`);
+  const migrateMessages = db.prepare(
+    `UPDATE messages SET chat_jid = ? WHERE chat_jid = ?`,
+  );
+  const migrateTasks = db.prepare(
+    `UPDATE scheduled_tasks SET chat_jid = ? WHERE chat_jid = ?`,
+  );
+
+  for (const { jid } of oldChats) {
+    const parts = jid.split(':');
+    if (parts.length === 2) {
+      // Old format: telegram:CHATID → telegram:BOTKEY:CHATID
+      const newJid = `telegram:${defaultBotKey}:${parts[1]}`;
+      migrateJid.run(newJid, jid);
+      migrateMessages.run(newJid, jid);
+      migrateTasks.run(newJid, jid);
+      migrated++;
+    }
+  }
+
+  if (migrated > 0) {
+    logger.info({ migrated, defaultBotKey }, 'Migrated old-format telegram JIDs in database');
+  }
 }
