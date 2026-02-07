@@ -260,8 +260,16 @@ function buildVolumeMounts(
   return mounts;
 }
 
-function buildContainerArgs(mounts: VolumeMount[]): string[] {
+function buildContainerArgs(
+  mounts: VolumeMount[],
+  containerConfig?: RegisteredGroup['containerConfig'],
+): string[] {
   const args: string[] = ['run', '-i', '--rm'];
+
+  // Network mode (Docker only - Apple Container doesn't support this)
+  if (CONTAINER_RUNTIME === 'docker' && containerConfig?.networkMode) {
+    args.push('--network', containerConfig.networkMode);
+  }
 
   for (const mount of mounts) {
     if (CONTAINER_RUNTIME === 'docker') {
@@ -281,7 +289,9 @@ function buildContainerArgs(mounts: VolumeMount[]): string[] {
     }
   }
 
-  args.push(CONTAINER_IMAGE);
+  // Use per-group image if specified, otherwise default
+  const image = containerConfig?.image || CONTAINER_IMAGE;
+  args.push(image);
 
   return args;
 }
@@ -296,7 +306,7 @@ export async function runContainerAgent(
   fs.mkdirSync(groupDir, { recursive: true });
 
   const mounts = buildVolumeMounts(group, input.isMain);
-  const containerArgs = buildContainerArgs(mounts);
+  const containerArgs = buildContainerArgs(mounts, group.containerConfig);
 
   logger.debug(
     {

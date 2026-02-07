@@ -35,6 +35,8 @@ export interface AllowedRoot {
 }
 
 export interface ContainerConfig {
+  image?: string; // Container image to use (default: nanoclaw-agent:latest)
+  networkMode?: 'bridge' | 'host' | 'none'; // Docker network mode (default: bridge)
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
   env?: Record<string, string>;
