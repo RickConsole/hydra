@@ -58,18 +58,100 @@ async function setTyping(jid: string, isTyping: boolean): Promise<void> {
   }
 }
 
+// Telegram message limit is 4096 characters
+const TELEGRAM_MAX_LENGTH = 4096;
+
+// Split long messages into chunks, trying to break at natural points
+function splitMessage(text: string, maxLength: number = TELEGRAM_MAX_LENGTH): string[] {
+  if (text.length <= maxLength) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLength) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Try to find a good break point (double newline, single newline, space)
+    let breakPoint = -1;
+    const searchRange = remaining.slice(0, maxLength);
+
+    // Prefer breaking at paragraph boundaries
+    const lastDoubleNewline = searchRange.lastIndexOf('\n\n');
+    if (lastDoubleNewline > maxLength * 0.5) {
+      breakPoint = lastDoubleNewline + 2;
+    } else {
+      // Try single newline
+      const lastNewline = searchRange.lastIndexOf('\n');
+      if (lastNewline > maxLength * 0.5) {
+        breakPoint = lastNewline + 1;
+      } else {
+        // Try space
+        const lastSpace = searchRange.lastIndexOf(' ');
+        if (lastSpace > maxLength * 0.5) {
+          breakPoint = lastSpace + 1;
+        } else {
+          // Hard break at max length
+          breakPoint = maxLength;
+        }
+      }
+    }
+
+    chunks.push(remaining.slice(0, breakPoint).trimEnd());
+    remaining = remaining.slice(breakPoint).trimStart();
+  }
+
+  return chunks;
+}
+
 async function sendTelegramMessage(botKey: string, chatId: string, text: string): Promise<void> {
   const bot = bots.get(botKey);
   if (!bot) {
     logger.error({ botKey, chatId }, 'Bot not found for sending message');
     return;
   }
-  try {
-    await bot.telegram.sendMessage(chatId, text, { parse_mode: 'Markdown' });
-    logger.info({ botKey, chatId, length: text.length }, 'Telegram message sent');
-  } catch (error) {
-    logger.error({ error, botKey, chatId }, 'Failed to send Telegram message');
-    throw error;
+
+  // Split long messages into chunks
+  const chunks = splitMessage(text);
+  const isMultiPart = chunks.length > 1;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = isMultiPart ? `[${i + 1}/${chunks.length}]\n${chunks[i]}` : chunks[i];
+
+    try {
+      await bot.telegram.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+      logger.info({ botKey, chatId, length: chunk.length, part: i + 1, total: chunks.length }, 'Telegram message sent');
+    } catch (error) {
+      // If Markdown parsing fails, retry without formatting
+      const isMarkdownError = error instanceof Error &&
+        'response' in error &&
+        typeof error.response === 'object' &&
+        error.response !== null &&
+        'description' in error.response &&
+        typeof error.response.description === 'string' &&
+        error.response.description.includes("can't parse entities");
+
+      if (isMarkdownError) {
+        logger.warn({ botKey, chatId, part: i + 1 }, 'Markdown parse failed, retrying as plain text');
+        try {
+          await bot.telegram.sendMessage(chatId, chunk);
+          logger.info({ botKey, chatId, length: chunk.length, part: i + 1, total: chunks.length }, 'Telegram message sent (plain text fallback)');
+        } catch (retryError) {
+          logger.error({ error: retryError, botKey, chatId, part: i + 1 }, 'Failed to send plain text fallback');
+          throw retryError;
+        }
+      } else {
+        logger.error({ error, botKey, chatId, part: i + 1 }, 'Failed to send Telegram message');
+        throw error;
+      }
+    }
+
+    // Small delay between chunks to avoid rate limiting
+    if (i < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
 }
 
@@ -241,7 +323,7 @@ async function sendMessage(jid: string, text: string): Promise<void> {
 
 function setupBot(botKey: string, botConfig: { token: string; name: string }): void {
   const bot = new Telegraf(botConfig.token, {
-    handlerTimeout: 180_000, // 3 minutes (default is 90s)
+    handlerTimeout: 360_000, // 6 minutes - longer than container timeout (5 min) to ensure responses come through
   });
   const triggerPattern = getTriggerPattern(botConfig.name);
 
@@ -315,7 +397,15 @@ function setupBot(botKey: string, botConfig: { token: string; name: string }): v
     } catch (error) {
       logger.error({ error, botKey, chatId }, 'Error processing Telegram message');
       try {
-        await bot.telegram.sendMessage(chatId, 'Sorry, something went wrong.');
+        // Include error details in the message for easier debugging
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorDetails = error instanceof Error && 'response' in error
+          ? JSON.stringify((error as { response?: unknown }).response, null, 2)
+          : '';
+        const debugInfo = errorDetails
+          ? `Sorry, something went wrong.\n\n\`\`\`\n${errorMessage}\n${errorDetails}\n\`\`\``
+          : `Sorry, something went wrong.\n\n\`\`\`\n${errorMessage}\n\`\`\``;
+        await bot.telegram.sendMessage(chatId, debugInfo);
       } catch {
         // ignore send failure during error handling
       }
