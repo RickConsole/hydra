@@ -10,7 +10,10 @@ import path from 'path';
 import crypto from 'crypto';
 
 import {
+  buildSmsJid,
   buildVoiceJid,
+  SMS_ALLOWED_SENDERS,
+  SMS_ENABLED,
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE_NUMBER,
@@ -33,6 +36,9 @@ import { ActiveCall } from './types.js';
 // Callbacks provided by index.ts
 type RunAgentFn = (prompt: string, chatJid: string) => Promise<string | null>;
 type SendMessageFn = (jid: string, text: string) => Promise<void>;
+
+// SMS callback (set by setSmsCallback)
+let smsRunAgentCallback: RunAgentFn | null = null;
 
 let runAgentCallback: RunAgentFn;
 let sendMessageCallback: SendMessageFn;
@@ -163,6 +169,50 @@ function checkCallEnded(params: Record<string, string>): boolean {
 function respond(res: ServerResponse, statusCode: number, body: string, contentType = 'application/xml'): void {
   res.writeHead(statusCode, { 'Content-Type': contentType });
   res.end(body);
+}
+
+/**
+ * Handle incoming SMS messages
+ */
+async function handleIncomingSms(params: Record<string, string>, res: ServerResponse): Promise<void> {
+  const messageSid = params.MessageSid || '';
+  const from = params.From || '';
+  const to = params.To || '';
+  const body = params.Body || '';
+
+  logger.info({ messageSid, from, to, bodyLength: body.length }, 'Incoming SMS');
+
+  // Check allowlist
+  if (SMS_ALLOWED_SENDERS.length > 0 && !SMS_ALLOWED_SENDERS.includes(from)) {
+    logger.warn({ from }, 'Rejected SMS from unauthorized number');
+    respond(res, 200, twiml(''), 'application/xml');
+    return;
+  }
+
+  // Acknowledge immediately with empty TwiML
+  respond(res, 200, twiml(''), 'application/xml');
+
+  if (!smsRunAgentCallback) {
+    logger.warn('SMS received but no agent callback configured');
+    return;
+  }
+
+  // Build JID and run agent
+  const smsJid = buildSmsJid(from);
+
+  try {
+    const timestamp = new Date().toISOString();
+    const prompt = `<messages>\n<message sender="${from}" time="${timestamp}" channel="sms">${escapeXml(body)}</message>\n</messages>`;
+
+    logger.info({ from, smsJid }, 'Processing SMS message');
+    const response = await smsRunAgentCallback(prompt, smsJid);
+
+    if (response) {
+      await sendMessageCallback(smsJid, response);
+    }
+  } catch (err) {
+    logger.error({ err, from, messageSid }, 'Error processing SMS');
+  }
 }
 
 function handleIncoming(params: Record<string, string>, res: ServerResponse): void {
@@ -468,6 +518,14 @@ export async function startVoiceServer(
       } else if (pathname.startsWith('/voice/poll/')) {
         const callSid = decodeURIComponent(pathname.slice('/voice/poll/'.length));
         handlePoll(callSid, params, res);
+      } else if (pathname === '/sms/incoming') {
+        // SMS webhook - shares same server as voice
+        await handleIncomingSms(params, res);
+      } else if (pathname === '/sms/status') {
+        // SMS delivery status callback
+        logger.debug({ messageSid: params.MessageSid, status: params.MessageStatus }, 'SMS status callback');
+        res.writeHead(200);
+        res.end('');
       } else {
         res.writeHead(404);
         res.end('Not found');
@@ -516,4 +574,12 @@ export function stopVoiceServer(): void {
 
   stopTunnel();
   logger.info('Voice server stopped');
+}
+
+/**
+ * Set the SMS agent callback. Called from index.ts when SMS is enabled.
+ */
+export function setSmsAgentCallback(runAgent: RunAgentFn): void {
+  smsRunAgentCallback = runAgent;
+  logger.info('SMS agent callback configured');
 }

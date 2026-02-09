@@ -25,7 +25,7 @@ let sendMessageCallback: SendMessageFn;
 let publicUrl = '';
 let server: Server | null = null;
 
-// SMS webhook port (offset from voice port)
+// SMS webhook port - uses voice port + 1 but routes through same ngrok
 const SMS_PORT = 3341;
 
 function twiml(body: string): string {

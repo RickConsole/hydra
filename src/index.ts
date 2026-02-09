@@ -1003,19 +1003,21 @@ async function main(): Promise<void> {
     }
   }
 
-  // Start SMS server if enabled
+  // Enable SMS handling if configured (uses same server as voice)
   if (SMS_ENABLED) {
-    const { startSmsServer, getSmsWebhookUrl } = await import('./sms.js');
     const smsGroup = Object.values(registeredGroups).find((g) => g.folder === SMS_GROUP);
     if (smsGroup) {
       const smsRunAgent = async (prompt: string, chatJid: string) => {
         return runAgent(smsGroup, prompt, chatJid);
       };
-      // SMS uses the same ngrok tunnel as voice (if available)
-      const { getTunnelUrl } = await import('./voice-tunnel.js');
-      const tunnelUrl = getTunnelUrl();
-      await startSmsServer(smsRunAgent, sendMessage, tunnelUrl);
-      logger.info({ group: SMS_GROUP, webhookUrl: getSmsWebhookUrl() }, 'SMS enabled');
+      // SMS shares the voice server - just set the callback
+      if (VOICE_ENABLED) {
+        const { setSmsAgentCallback } = await import('./voice.js');
+        setSmsAgentCallback(smsRunAgent);
+        logger.info({ group: SMS_GROUP, webhookUrl: 'https://' + process.env.NGROK_DOMAIN + '/sms/incoming' }, 'SMS enabled (via voice server)');
+      } else {
+        logger.warn('SMS requires VOICE_ENABLED=true (shares the same webhook server)');
+      }
     } else {
       logger.warn({ group: SMS_GROUP }, 'SMS group not found in registered groups, SMS disabled');
     }
@@ -1035,9 +1037,7 @@ async function main(): Promise<void> {
     if (VOICE_ENABLED) {
       import('./voice.js').then(({ stopVoiceServer }) => stopVoiceServer()).catch(() => {});
     }
-    if (SMS_ENABLED) {
-      import('./sms.js').then(({ stopSmsServer }) => stopSmsServer()).catch(() => {});
-    }
+    // SMS is handled by voice server, no separate shutdown needed
     stopIpcWatcher();
     stopScheduler();
     for (const [botKey, bot] of bots) {

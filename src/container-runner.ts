@@ -118,8 +118,13 @@ function getHomeDir(): string {
   return home;
 }
 
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: string; data: string }; title?: string };
+
 export interface ContainerInput {
-  prompt: string;
+  prompt: string | ContentBlock[];
   sessionId?: string;
   groupFolder: string;
   chatJid: string;
@@ -444,7 +449,7 @@ export async function runContainerAgent(
       } else {
         logLines.push(
           `=== Input Summary ===`,
-          `Prompt length: ${input.prompt.length} chars`,
+          `Prompt length: ${typeof input.prompt === 'string' ? input.prompt.length + ' chars' : input.prompt.length + ' content blocks'}`,
           `Session ID: ${input.sessionId || 'new'}`,
           ``,
           `=== Mounts ===`,

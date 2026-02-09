@@ -5,12 +5,18 @@
 
 import fs from 'fs';
 import path from 'path';
-import { query, HookCallback, PreCompactHookInput } from '@anthropic-ai/claude-agent-sdk';
+import { randomUUID } from 'crypto';
+import { query, HookCallback, PreCompactHookInput, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { createIpcMcp } from './ipc-mcp.js';
 import { createMem0Mcp } from './mem0-mcp.js';
 
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: string; data: string }; title?: string };
+
 interface ContainerInput {
-  prompt: string;
+  prompt: string | ContentBlock[];
   sessionId?: string;
   groupFolder: string;
   chatJid: string;
@@ -229,17 +235,65 @@ async function main(): Promise<void> {
   let result: string | null = null;
   let newSessionId: string | undefined;
 
-  // Add context for scheduled tasks
-  let prompt = input.prompt;
-  if (input.isScheduledTask) {
-    prompt = `[SCHEDULED TASK - You are running automatically, not in response to a user message. Use mcp__nanoclaw__send_message if needed to communicate with the user.]\n\n${input.prompt}`;
+  // Build prompt: string for text-only, SDKUserMessage generator for multimodal
+  let promptArg: string | AsyncIterable<SDKUserMessage>;
+
+  if (typeof input.prompt === 'string') {
+    // Text-only path (existing behavior)
+    let textPrompt = input.prompt;
+    if (input.isScheduledTask) {
+      textPrompt = `[SCHEDULED TASK - You are running automatically, not in response to a user message. Use mcp__nanoclaw__send_message if needed to communicate with the user.]\n\n${input.prompt}`;
+    }
+    promptArg = textPrompt;
+  } else {
+    // Multimodal path: convert ContentBlock[] to Anthropic ContentBlockParam[]
+    type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    type DocMediaType = 'application/pdf';
+
+    const contentBlocks: import('@anthropic-ai/sdk/resources').ContentBlockParam[] = input.prompt.map((block) => {
+      if (block.type === 'text') {
+        return { type: 'text' as const, text: block.text };
+      } else if (block.type === 'image') {
+        return {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: block.source.media_type as ImageMediaType,
+            data: block.source.data,
+          },
+        };
+      } else {
+        return {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: block.source.media_type as DocMediaType,
+            data: block.source.data,
+          },
+          ...(block.title ? { title: block.title } : {}),
+        };
+      }
+    });
+
+    const userMessage: SDKUserMessage = {
+      type: 'user',
+      message: { role: 'user', content: contentBlocks },
+      parent_tool_use_id: null,
+      session_id: input.sessionId || randomUUID(),
+    };
+
+    async function* singleMessage(): AsyncIterable<SDKUserMessage> {
+      yield userMessage;
+    }
+    promptArg = singleMessage();
+    log(`Multimodal prompt with ${input.prompt.length} content blocks`);
   }
 
   try {
     log('Starting agent...');
 
     for await (const message of query({
-      prompt,
+      prompt: promptArg,
       options: {
         cwd: '/workspace/group',
         resume: input.sessionId,
