@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { query, HookCallback, PreCompactHookInput, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import { createIpcMcp } from './ipc-mcp.js';
+import { createIpcMcp, wasMessageSentViaIpc } from './ipc-mcp.js';
 import { createMem0Mcp } from './mem0-mcp.js';
 
 type ContentBlock =
@@ -327,9 +327,17 @@ async function main(): Promise<void> {
     }
 
     log('Agent completed successfully');
+
+    // If messages were sent via IPC (send_message tool), don't also return the result
+    // to avoid duplicate messages being sent to the user
+    const finalResult = wasMessageSentViaIpc() ? null : result;
+    if (wasMessageSentViaIpc()) {
+      log('Messages sent via IPC, suppressing final result to avoid duplicates');
+    }
+
     writeOutput({
       status: 'success',
-      result,
+      result: finalResult,
       newSessionId
     });
 

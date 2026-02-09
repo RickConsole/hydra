@@ -19,6 +19,17 @@ export interface IpcMcpContext {
   isMain: boolean;
 }
 
+// Track if send_message was used (to avoid duplicate responses)
+let messageSentViaIpc = false;
+
+export function wasMessageSentViaIpc(): boolean {
+  return messageSentViaIpc;
+}
+
+export function resetMessageSentFlag(): void {
+  messageSentViaIpc = false;
+}
+
 function writeIpcFile(dir: string, data: object): string {
   fs.mkdirSync(dir, { recursive: true });
 
@@ -42,7 +53,7 @@ export function createIpcMcp(ctx: IpcMcpContext) {
     tools: [
       tool(
         'send_message',
-        'Send a message to the current WhatsApp group. Use this to proactively share information or updates.',
+        'Send a message to the current chat. Use this to proactively share information or updates. When you use this tool, your response will be sent immediately - do not also include the same content in your final response.',
         {
           text: z.string().describe('The message text to send')
         },
@@ -56,6 +67,7 @@ export function createIpcMcp(ctx: IpcMcpContext) {
           };
 
           const filename = writeIpcFile(MESSAGES_DIR, data);
+          messageSentViaIpc = true;  // Track that we sent a message
 
           return {
             content: [{
