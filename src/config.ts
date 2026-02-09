@@ -124,6 +124,27 @@ export const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_tu
 export const NGROK_AUTHTOKEN = process.env.NGROK_AUTHTOKEN || '';
 export const NGROK_DOMAIN = process.env.NGROK_DOMAIN || '';
 
+// SMS configuration
+export const SMS_ENABLED = process.env.SMS_ENABLED === 'true';
+export const SMS_GROUP = process.env.SMS_GROUP || 'main';
+export const SMS_ALLOWED_SENDERS = (process.env.SMS_ALLOWED_SENDERS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+export function parseSmsJid(jid: string): { phoneNumber: string } | null {
+  if (!jid.startsWith('sms:twilio:')) return null;
+  const parts = jid.split(':');
+  if (parts.length === 3) {
+    return { phoneNumber: parts[2] };
+  }
+  return null;
+}
+
+export function buildSmsJid(phoneNumber: string): string {
+  return `sms:twilio:${phoneNumber}`;
+}
+
 export function parseVoiceJid(jid: string): { callSid: string } | null {
   if (!jid.startsWith('voice:twilio:')) return null;
   const parts = jid.split(':');

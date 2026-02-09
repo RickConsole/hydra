@@ -8,6 +8,7 @@ import { NGROK_AUTHTOKEN, NGROK_DOMAIN, VOICE_PORT } from './config.js';
 import { logger } from './logger.js';
 
 let ngrokProcess: ChildProcess | null = null;
+let tunnelUrl = '';
 
 export async function startTunnel(): Promise<string> {
   if (!NGROK_AUTHTOKEN) {
@@ -43,7 +44,8 @@ export async function startTunnel(): Promise<string> {
         // If we have a domain, we can construct the URL directly
         if (NGROK_DOMAIN) {
           logger.info({ domain: NGROK_DOMAIN }, 'Using configured ngrok domain');
-          resolve(`https://${NGROK_DOMAIN}`);
+          tunnelUrl = `https://${NGROK_DOMAIN}`;
+          resolve(tunnelUrl);
         } else {
           reject(new Error('Timed out waiting for ngrok URL'));
         }
@@ -63,8 +65,9 @@ export async function startTunnel(): Promise<string> {
             if (!resolved) {
               resolved = true;
               clearTimeout(timeout);
+              tunnelUrl = log.url;
               logger.info({ url: log.url }, 'ngrok tunnel established');
-              resolve(log.url);
+              resolve(tunnelUrl);
             }
           }
         } catch {
@@ -104,6 +107,11 @@ export function stopTunnel(): void {
   if (ngrokProcess) {
     ngrokProcess.kill('SIGTERM');
     ngrokProcess = null;
+    tunnelUrl = '';
     logger.info('ngrok tunnel stopped');
   }
+}
+
+export function getTunnelUrl(): string {
+  return tunnelUrl;
 }

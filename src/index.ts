@@ -13,8 +13,11 @@ import {
   IPC_POLL_INTERVAL,
   loadBotRegistry,
   MAIN_GROUP_FOLDER,
+  parseSmsJid,
   parseTelegramJid,
   parseVoiceJid,
+  SMS_ENABLED,
+  SMS_GROUP,
   TIMEZONE,
   VOICE_ENABLED,
   VOICE_GROUP,
@@ -376,6 +379,13 @@ async function sendMessage(jid: string, text: string): Promise<void> {
     // IPC messages to voice JIDs get queued as TTS responses
     const { queueVoiceResponse } = await import('./voice.js');
     await queueVoiceResponse(voiceParsed.callSid, text);
+    return;
+  }
+
+  const smsParsed = parseSmsJid(jid);
+  if (smsParsed) {
+    const { sendSms } = await import('./sms.js');
+    await sendSms(smsParsed.phoneNumber, text);
     return;
   }
 
@@ -993,6 +1003,24 @@ async function main(): Promise<void> {
     }
   }
 
+  // Start SMS server if enabled
+  if (SMS_ENABLED) {
+    const { startSmsServer, getSmsWebhookUrl } = await import('./sms.js');
+    const smsGroup = Object.values(registeredGroups).find((g) => g.folder === SMS_GROUP);
+    if (smsGroup) {
+      const smsRunAgent = async (prompt: string, chatJid: string) => {
+        return runAgent(smsGroup, prompt, chatJid);
+      };
+      // SMS uses the same ngrok tunnel as voice (if available)
+      const { getTunnelUrl } = await import('./voice-tunnel.js');
+      const tunnelUrl = getTunnelUrl();
+      await startSmsServer(smsRunAgent, sendMessage, tunnelUrl);
+      logger.info({ group: SMS_GROUP, webhookUrl: getSmsWebhookUrl() }, 'SMS enabled');
+    } else {
+      logger.warn({ group: SMS_GROUP }, 'SMS group not found in registered groups, SMS disabled');
+    }
+  }
+
   // Start background services
   const stopIpcWatcher = startIpcWatcher();
   const stopScheduler = startSchedulerLoop({
@@ -1006,6 +1034,9 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'Shutting down');
     if (VOICE_ENABLED) {
       import('./voice.js').then(({ stopVoiceServer }) => stopVoiceServer()).catch(() => {});
+    }
+    if (SMS_ENABLED) {
+      import('./sms.js').then(({ stopSmsServer }) => stopSmsServer()).catch(() => {});
     }
     stopIpcWatcher();
     stopScheduler();

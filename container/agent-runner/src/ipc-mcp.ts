@@ -67,6 +67,50 @@ export function createIpcMcp(ctx: IpcMcpContext) {
       ),
 
       tool(
+        'send_sms',
+        'Send an SMS text message to a phone number. Only available in main group. Phone numbers should be in E.164 format (e.g., +14155551234).',
+        {
+          to: z.string().describe('Phone number in E.164 format (e.g., +14155551234)'),
+          text: z.string().describe('The SMS message text to send')
+        },
+        async (args) => {
+          if (!isMain) {
+            return {
+              content: [{ type: 'text', text: 'SMS sending is only available from the main group.' }],
+              isError: true
+            };
+          }
+
+          // Validate phone number format
+          if (!args.to.match(/^\+[1-9]\d{1,14}$/)) {
+            return {
+              content: [{ type: 'text', text: `Invalid phone number format: "${args.to}". Use E.164 format like +14155551234` }],
+              isError: true
+            };
+          }
+
+          // Build SMS JID and queue message
+          const smsJid = `sms:twilio:${args.to}`;
+          const data = {
+            type: 'message',
+            chatJid: smsJid,
+            text: args.text,
+            groupFolder,
+            timestamp: new Date().toISOString()
+          };
+
+          const filename = writeIpcFile(MESSAGES_DIR, data);
+
+          return {
+            content: [{
+              type: 'text',
+              text: `SMS queued for delivery to ${args.to} (${filename})`
+            }]
+          };
+        }
+      ),
+
+      tool(
         'schedule_task',
         `Schedule a recurring or one-time task. The task will run as a full agent with access to all tools.
 
