@@ -20,6 +20,7 @@ import {
   VOICE_GROUP,
 } from './config.js';
 import {
+  ContentBlock,
   runContainerAgent,
   writeGroupsSnapshot,
   writeTasksSnapshot,
@@ -54,7 +55,8 @@ async function setTyping(jid: string, isTyping: boolean): Promise<void> {
   try {
     await bot.telegram.sendChatAction(parsed.chatId, 'typing');
   } catch (err) {
-    logger.debug({ jid, err }, 'Failed to set typing indicator');
+    // Elevated to warn level for visibility - typing failures can indicate rate limiting
+    logger.warn({ jid, err }, 'Failed to set typing indicator');
   }
 }
 
@@ -106,6 +108,65 @@ function splitMessage(text: string, maxLength: number = TELEGRAM_MAX_LENGTH): st
   return chunks;
 }
 
+// Supported image MIME types for the Claude API
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+async function downloadFileAsBase64(
+  bot: Telegraf,
+  fileId: string,
+): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const fileLink = await bot.telegram.getFileLink(fileId);
+    const response = await fetch(fileLink.href);
+    if (!response.ok) {
+      logger.error({ fileId, status: response.status }, 'Failed to download Telegram file');
+      return null;
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+    return { data: buffer.toString('base64'), mimeType };
+  } catch (err) {
+    logger.error({ fileId, err }, 'Error downloading Telegram file');
+    return null;
+  }
+}
+
+// Helper to check if error is a rate limit (429) error
+function isRateLimitError(error: unknown): { retryAfter: number } | null {
+  if (!(error instanceof Error) || !('response' in error)) return null;
+  const response = error.response as { error_code?: number; parameters?: { retry_after?: number } };
+  if (response?.error_code === 429) {
+    return { retryAfter: response.parameters?.retry_after || 1 };
+  }
+  return null;
+}
+
+// Helper to send a single message with retry logic for rate limits
+async function sendWithRetry(
+  bot: Telegraf,
+  chatId: string,
+  text: string,
+  parseMode: 'Markdown' | undefined,
+  maxRetries: number = 3,
+): Promise<void> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await bot.telegram.sendMessage(chatId, text, parseMode ? { parse_mode: parseMode } : {});
+      return;
+    } catch (error) {
+      const rateLimit = isRateLimitError(error);
+      if (rateLimit && attempt < maxRetries) {
+        // Exponential backoff: use Telegram's retry_after or 2^attempt seconds
+        const waitTime = Math.max(rateLimit.retryAfter, Math.pow(2, attempt)) * 1000;
+        logger.warn({ chatId, attempt, waitTime, retryAfter: rateLimit.retryAfter }, 'Rate limited, waiting before retry');
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 async function sendTelegramMessage(botKey: string, chatId: string, text: string): Promise<void> {
   const bot = bots.get(botKey);
   if (!bot) {
@@ -121,7 +182,7 @@ async function sendTelegramMessage(botKey: string, chatId: string, text: string)
     const chunk = isMultiPart ? `[${i + 1}/${chunks.length}]\n${chunks[i]}` : chunks[i];
 
     try {
-      await bot.telegram.sendMessage(chatId, chunk, { parse_mode: 'Markdown' });
+      await sendWithRetry(bot, chatId, chunk, 'Markdown');
       logger.info({ botKey, chatId, length: chunk.length, part: i + 1, total: chunks.length }, 'Telegram message sent');
     } catch (error) {
       // If Markdown parsing fails, retry without formatting
@@ -136,7 +197,7 @@ async function sendTelegramMessage(botKey: string, chatId: string, text: string)
       if (isMarkdownError) {
         logger.warn({ botKey, chatId, part: i + 1 }, 'Markdown parse failed, retrying as plain text');
         try {
-          await bot.telegram.sendMessage(chatId, chunk);
+          await sendWithRetry(bot, chatId, chunk, undefined);
           logger.info({ botKey, chatId, length: chunk.length, part: i + 1, total: chunks.length }, 'Telegram message sent (plain text fallback)');
         } catch (retryError) {
           logger.error({ error: retryError, botKey, chatId, part: i + 1 }, 'Failed to send plain text fallback');
@@ -243,7 +304,7 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
 
 async function runAgent(
   group: RegisteredGroup,
-  prompt: string,
+  prompt: string | ContentBlock[],
   chatJid: string,
 ): Promise<string | null> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
@@ -328,7 +389,11 @@ function setupBot(botKey: string, botConfig: { token: string; name: string }): v
   const triggerPattern = getTriggerPattern(botConfig.name);
 
   bot.on('message', async (ctx) => {
-    if (!ctx.message || !('text' in ctx.message)) return;
+    if (!ctx.message) return;
+    const hasText = 'text' in ctx.message;
+    const hasPhoto = 'photo' in ctx.message;
+    const hasDocument = 'document' in ctx.message;
+    if (!hasText && !hasPhoto && !hasDocument) return;
 
     const chatId = String(ctx.chat.id);
     const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
@@ -336,9 +401,14 @@ function setupBot(botKey: string, botConfig: { token: string; name: string }): v
     const timestamp = new Date(ctx.message.date * 1000).toISOString();
     const telegramJid = buildTelegramJid(botKey, chatId);
 
+    // Extract text: from text messages or captions on media
+    const textContent = hasText
+      ? (ctx.message as { text: string }).text
+      : ('caption' in ctx.message ? (ctx.message as { caption?: string }).caption || '' : '');
+
     logger.info(
-      { botKey, chatId, isGroup, senderName },
-      `Telegram message: ${ctx.message.text}`,
+      { botKey, chatId, isGroup, senderName, hasPhoto, hasDocument },
+      `Telegram message: ${textContent.slice(0, 200) || '[media]'}`,
     );
 
     try {
@@ -351,7 +421,7 @@ function setupBot(botKey: string, botConfig: { token: string; name: string }): v
 
       const group = registeredGroups[telegramJid];
       const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
-      const content = ctx.message.text.trim();
+      const content = textContent.trim();
 
       // Handle /new command - reset session for this group
       if (content === '/new' || content.toLowerCase() === '/new') {
@@ -362,9 +432,10 @@ function setupBot(botKey: string, botConfig: { token: string; name: string }): v
         return;
       }
 
-      // DMs always respond; group chats require @BotName trigger
-      if (isGroup && !isMainGroup && !triggerPattern.test(content)) return;
-      // For DMs (non-group), always respond regardless of trigger
+      // DMs always respond; group chats require @BotName trigger (in text or caption)
+      if (isGroup && !isMainGroup) {
+        if (!content || !triggerPattern.test(content)) return;
+      }
 
       const escapeXml = (s: string) =>
         s
@@ -373,9 +444,75 @@ function setupBot(botKey: string, botConfig: { token: string; name: string }): v
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;');
 
-      const prompt = `<messages>\n<message sender="${escapeXml(senderName)}" time="${timestamp}">${escapeXml(ctx.message.text)}</message>\n</messages>`;
+      // Build prompt: multimodal for photos/documents, string for text-only
+      let prompt: string | ContentBlock[];
 
-      logger.info({ botKey, group: group.name, senderName }, 'Processing Telegram message');
+      if (hasPhoto || hasDocument) {
+        // Multimodal path
+        const blocks: ContentBlock[] = [];
+
+        // Text block with sender/timestamp wrapper
+        const textWrapper = `<messages>\n<message sender="${escapeXml(senderName)}" time="${timestamp}">${content ? escapeXml(content) : '[attached media]'}</message>\n</messages>`;
+        blocks.push({ type: 'text', text: textWrapper });
+
+        if (hasPhoto) {
+          const photos = (ctx.message as { photo: Array<{ file_id: string }> }).photo;
+          const bestPhoto = photos[photos.length - 1]; // highest resolution
+          const downloaded = await downloadFileAsBase64(bot, bestPhoto.file_id);
+          if (downloaded) {
+            // Telegram may return generic content-type; default to JPEG for photos
+            const mimeType = SUPPORTED_IMAGE_TYPES.has(downloaded.mimeType)
+              ? downloaded.mimeType
+              : 'image/jpeg';
+            blocks.push({
+              type: 'image',
+              source: { type: 'base64', media_type: mimeType, data: downloaded.data },
+            });
+            logger.info({ botKey, chatId, mimeType }, 'Photo downloaded and encoded');
+          } else {
+            logger.warn({ botKey, chatId }, 'Photo download failed, proceeding with text only');
+          }
+        }
+
+        if (hasDocument) {
+          const doc = (ctx.message as { document: { file_id: string; mime_type?: string; file_name?: string } }).document;
+          const docMime = doc.mime_type || 'application/octet-stream';
+
+          if (docMime === 'application/pdf') {
+            const downloaded = await downloadFileAsBase64(bot, doc.file_id);
+            if (downloaded) {
+              blocks.push({
+                type: 'document',
+                source: { type: 'base64', media_type: 'application/pdf', data: downloaded.data },
+                ...(doc.file_name ? { title: doc.file_name } : {}),
+              });
+              logger.info({ botKey, chatId, fileName: doc.file_name }, 'PDF downloaded and encoded');
+            } else {
+              logger.warn({ botKey, chatId }, 'PDF download failed, proceeding with text only');
+            }
+          } else if (SUPPORTED_IMAGE_TYPES.has(docMime)) {
+            // Image sent as document (uncompressed)
+            const downloaded = await downloadFileAsBase64(bot, doc.file_id);
+            if (downloaded) {
+              blocks.push({
+                type: 'image',
+                source: { type: 'base64', media_type: docMime, data: downloaded.data },
+              });
+              logger.info({ botKey, chatId, mimeType: docMime }, 'Image document downloaded and encoded');
+            }
+          } else {
+            logger.info({ botKey, chatId, mimeType: docMime }, 'Unsupported document type, processing caption only');
+          }
+        }
+
+        // Use multimodal only if we successfully got media blocks; otherwise fall back to text
+        prompt = blocks.length > 1 ? blocks : `<messages>\n<message sender="${escapeXml(senderName)}" time="${timestamp}">${content ? escapeXml(content) : '[unsupported media]'}</message>\n</messages>`;
+      } else {
+        // Text-only path (existing behavior)
+        prompt = `<messages>\n<message sender="${escapeXml(senderName)}" time="${timestamp}">${escapeXml(textContent)}</message>\n</messages>`;
+      }
+
+      logger.info({ botKey, group: group.name, senderName, multimodal: Array.isArray(prompt) }, 'Processing Telegram message');
 
       // Keep typing indicator alive by refreshing every 4 seconds
       await setTyping(telegramJid, true);
@@ -453,7 +590,8 @@ function startIpcWatcher(): () => void {
         if (fs.existsSync(messagesDir)) {
           const messageFiles = fs
             .readdirSync(messagesDir)
-            .filter((f) => f.endsWith('.json'));
+            .filter((f) => f.endsWith('.json'))
+            .sort(); // Sort chronologically (filenames start with timestamp)
           for (const file of messageFiles) {
             const filePath = path.join(messagesDir, file);
             try {
@@ -465,6 +603,8 @@ function startIpcWatcher(): () => void {
                   isMain ||
                   (targetGroup && targetGroup.folder === sourceGroup)
                 ) {
+                  // Show typing indicator before sending IPC message
+                  await setTyping(data.chatJid, true);
                   // Telegram bots send as themselves, no prefix needed
                   const ipcMsg = data.chatJid.startsWith('telegram:')
                     ? data.text
@@ -508,7 +648,8 @@ function startIpcWatcher(): () => void {
         if (fs.existsSync(tasksDir)) {
           const taskFiles = fs
             .readdirSync(tasksDir)
-            .filter((f) => f.endsWith('.json'));
+            .filter((f) => f.endsWith('.json'))
+            .sort(); // Sort chronologically (filenames start with timestamp)
           for (const file of taskFiles) {
             const filePath = path.join(tasksDir, file);
             try {
