@@ -11,7 +11,9 @@ import {
   DATA_DIR,
   getTriggerPattern,
   IPC_POLL_INTERVAL,
+  isUsingUnifiedConfig,
   loadBotRegistry,
+  loadRegisteredGroups,
   MAIN_GROUP_FOLDER,
   parseSmsJid,
   parseTelegramJid,
@@ -228,12 +230,23 @@ function loadState(): void {
   lastTimestamp = state.last_timestamp || '';
   lastAgentTimestamp = state.last_agent_timestamp || {};
   sessions = loadJson(path.join(DATA_DIR, 'sessions.json'), {});
-  registeredGroups = loadJson(
-    path.join(DATA_DIR, 'registered_groups.json'),
-    {},
-  );
+
+  // Load registered groups from hydra.yaml if available, else from JSON
+  registeredGroups = loadRegisteredGroups();
+
+  // Fall back to JSON file if unified config returned empty (backward compat)
+  if (Object.keys(registeredGroups).length === 0) {
+    registeredGroups = loadJson(
+      path.join(DATA_DIR, 'registered_groups.json'),
+      {},
+    );
+  }
+
   logger.info(
-    { groupCount: Object.keys(registeredGroups).length },
+    {
+      groupCount: Object.keys(registeredGroups).length,
+      source: isUsingUnifiedConfig() ? 'hydra.yaml' : 'legacy',
+    },
     'State loaded',
   );
 }
@@ -955,14 +968,21 @@ function ensureContainerSystemRunning(): void {
 }
 
 async function main(): Promise<void> {
+  // Log config source
+  if (isUsingUnifiedConfig()) {
+    logger.info('Starting Hydra with unified config (hydra.yaml)');
+  } else {
+    logger.info('Starting Hydra with legacy config (data/*.json + .env)');
+  }
+
   ensureContainerSystemRunning();
   initDatabase();
   logger.info('Database initialized');
 
-  // Load bot registry
+  // Load bot registry (from hydra.yaml or legacy sources)
   botRegistry = loadBotRegistry();
   const botKeys = Object.keys(botRegistry);
-  logger.info({ bots: botKeys }, 'Bot registry loaded');
+  logger.info({ bots: botKeys, source: isUsingUnifiedConfig() ? 'hydra.yaml' : 'legacy' }, 'Bot registry loaded');
 
   // Load state before migration
   loadState();
@@ -1052,6 +1072,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  logger.error({ err }, 'Failed to start NanoClaw');
+  logger.error({ err }, 'Failed to start Hydra');
   process.exit(1);
 });
