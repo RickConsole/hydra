@@ -110,13 +110,19 @@ export function getTriggerPattern(botName: string): RegExp {
 
 /**
  * Load bot registry from hydra.yaml, data/bots.json, or env vars.
+ * Returns empty registry if no bots configured (web-console-only mode).
  */
 export function loadBotRegistry(): BotRegistry {
-  // If unified config is loaded and has bots, use that
-  if (usingUnifiedConfig && hydraConfig && Object.keys(hydraConfig.bots).length > 0) {
-    const registry = toLegacyBotRegistry(hydraConfig);
-    logger.debug({ bots: Object.keys(registry) }, 'Bot registry loaded from hydra config');
-    return registry;
+  // If unified config is loaded, use that (even if empty - allows web-console-only mode)
+  if (usingUnifiedConfig && hydraConfig) {
+    if (Object.keys(hydraConfig.bots).length > 0) {
+      const registry = toLegacyBotRegistry(hydraConfig);
+      logger.debug({ bots: Object.keys(registry) }, 'Bot registry loaded from hydra config');
+      return registry;
+    }
+    // Empty bots in hydra.yaml = web-console-only mode
+    logger.info('No bots configured in hydra.yaml - running in web-console-only mode');
+    return {};
   }
 
   // Fall back to legacy: data/bots.json
@@ -128,9 +134,9 @@ export function loadBotRegistry(): BotRegistry {
   // Fall back to legacy: env vars
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
-    throw new Error(
-      'No bot configuration found. Create hydra.yaml, data/bots.json, or set TELEGRAM_BOT_TOKEN env var.',
-    );
+    // No bots configured anywhere - this is fine for web-console-only mode
+    logger.info('No bot configuration found - running in web-console-only mode');
+    return {};
   }
 
   const name = process.env.ASSISTANT_NAME || 'Andy';

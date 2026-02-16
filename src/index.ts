@@ -989,10 +989,12 @@ async function main(): Promise<void> {
   // Load state before migration
   loadState();
 
-  // Migrate old-format JIDs using the first bot key as default
+  // Migrate old-format JIDs using the first bot key as default (skip if no bots)
   const defaultBotKey = botKeys[0];
-  migrateTelegramJids(defaultBotKey);
-  migrateDataFileJids(defaultBotKey);
+  if (defaultBotKey) {
+    migrateTelegramJids(defaultBotKey);
+    migrateDataFileJids(defaultBotKey);
+  }
 
   // Setup all bots
   for (const [botKey, botConfig] of Object.entries(botRegistry)) {

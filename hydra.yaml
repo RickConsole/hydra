@@ -1,0 +1,11 @@
+version: "1"
+project: hydra-test
+
+bots: {}
+
+agents:
+  - name: Test Agent
+    folder: main
+    trigger: "@Test"
+    bot: ""
+    chat_id: ""
