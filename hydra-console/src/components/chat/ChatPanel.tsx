@@ -38,6 +38,10 @@ export function ChatPanel() {
           ...payload.message,
           timestamp: new Date(payload.message.timestamp),
         });
+        // Clear typing indicator when assistant message arrives
+        if (payload.message.role === 'assistant') {
+          setTyping(selectedAgentId, false);
+        }
       }
     });
 
@@ -72,30 +76,29 @@ export function ChatPanel() {
       setTyping(selectedAgentId, true);
 
       try {
-        // Send to API
-        const response = await agentApi.sendMessage(selectedAgentId, content);
-
-        // Add assistant response
-        const assistantMessage: ChatMessageType = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: response.response,
-          timestamp: new Date(),
-          agentId: selectedAgentId,
-        };
-        addMessage(selectedAgentId, assistantMessage);
+        // Send to API - response comes via WebSocket, so we don't wait for it
+        // The API call just triggers the container agent
+        await agentApi.sendMessage(selectedAgentId, content);
+        // Response will arrive via WebSocket chat:message event
+        // Typing indicator will be cleared when response arrives
       } catch (error) {
-        // Add error message
-        const errorMessage: ChatMessageType = {
-          id: crypto.randomUUID(),
-          role: 'system',
-          content: `Error: ${error instanceof Error ? error.message : 'Failed to send message'}`,
-          timestamp: new Date(),
-          agentId: selectedAgentId,
-        };
-        addMessage(selectedAgentId, errorMessage);
-      } finally {
-        setTyping(selectedAgentId, false);
+        // Only show error if it's not a timeout (response may still come via WS)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
+        const isTimeout = errorMsg.includes('abort') || errorMsg.includes('timeout');
+
+        if (!isTimeout) {
+          // Real error - add error message
+          const errorMessage: ChatMessageType = {
+            id: crypto.randomUUID(),
+            role: 'system',
+            content: `Error: ${errorMsg}`,
+            timestamp: new Date(),
+            agentId: selectedAgentId,
+          };
+          addMessage(selectedAgentId, errorMessage);
+          setTyping(selectedAgentId, false);
+        }
+        // For timeouts, keep typing indicator - response may still come via WS
       }
     },
     [selectedAgentId, addMessage, setTyping]

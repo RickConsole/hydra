@@ -87,6 +87,7 @@ export const agentApi = {
     apiRequest<{ response: string }>(`/api/agents/${id}/chat`, {
       method: 'POST',
       body: JSON.stringify({ message }),
+      timeout: 120000, // 2 minutes - container agents can take a while
     }),
 };
 
