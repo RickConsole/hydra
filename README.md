@@ -1,166 +1,265 @@
 <p align="center">
-  <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
+  <img src="assets/hydra-logo.png" alt="Hydra" width="400">
 </p>
 
 <p align="center">
-  My personal Claude assistant that runs securely in containers. Lightweight and built to be understood and customized for your own needs.
+  <strong>Secure AI agents that run in containers.</strong><br>
+  One config file. Real isolation. Full control.
 </p>
 
-## Why I Built This
+---
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an impressive project with a great vision. But I can't sleep well running software I don't understand with access to my life. OpenClaw has 52+ modules, 8 config management files, 45+ dependencies, and abstractions for 15 channel providers. Security is application-level (allowlists, pairing codes) rather than OS isolation. Everything runs in one Node process with shared memory.
+## What Makes Hydra Different
 
-NanoClaw gives you the same core functionality in a codebase you can understand in 8 minutes. One process. A handful of files. Agents run in actual Linux containers with filesystem isolation, not behind permission checks.
+Most AI agent frameworks run everything in a single process with application-level permission checks. If the agent can execute code, it can access anything the process can access. Security is an afterthought.
+
+**Hydra agents run in actual Linux containers.** Each agent is isolated at the OS level. They can only see what you explicitly mount. Bash commands execute inside the container, not on your host. This isn't a permission system—it's real sandboxing.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Your Machine                            │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                   Hydra Orchestrator                      │  │
+│  │  • Routes messages from Telegram/Web/Voice/SMS            │  │
+│  │  • Manages agent lifecycle and sessions                   │  │
+│  │  • Exposes API for Hydra Console                          │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│           │              │              │              │        │
+│           ▼              ▼              ▼              ▼        │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐           │
+│  │  Container   │ │  Container   │ │  Container   │  ...      │
+│  │  ┌────────┐  │ │  ┌────────┐  │ │  ┌────────┐  │           │
+│  │  │ Claude │  │ │  │ Claude │  │ │  │ Claude │  │           │
+│  │  │ Agent  │  │ │  │ Agent  │  │ │  │ Agent  │  │           │
+│  │  └────────┘  │ │  └────────┘  │ │  └────────┘  │           │
+│  │              │ │              │ │              │           │
+│  │  /workspace/ │ │  /workspace/ │ │  /workspace/ │           │
+│  │  └─ group/   │ │  └─ group/   │ │  └─ group/   │           │
+│  │     (only    │ │     (only    │ │     (only    │           │
+│  │     its own) │ │     its own) │ │     its own) │           │
+│  └──────────────┘ └──────────────┘ └──────────────┘           │
+│       main            dev            family                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Other key differences:**
+
+| | Typical Agent Framework | Hydra |
+|---|---|---|
+| **Security model** | Permission checks in code | OS-level container isolation |
+| **Bash commands** | Run on host | Run in container |
+| **File access** | Allowlists/blocklists | Only mounted paths exist |
+| **Agent isolation** | Shared memory, one process | Separate containers |
+| **Configuration** | Multiple files, env vars | Single `hydra.yaml` |
+| **Runtime** | Claude API wrapper | Claude Agent SDK (Claude Code) |
+
+## How It Works
+
+1. **Messages arrive** via Telegram, Web Console, Voice, or SMS
+2. **Orchestrator routes** the message to the right agent based on chat ID
+3. **Container spawns** with only that agent's folder mounted
+4. **Claude Agent SDK runs** inside the container with full tool access
+5. **Response returns** through the orchestrator to the original channel
+6. **Container exits** — no persistent processes, no state leakage
+
+Each agent has its own:
+- `CLAUDE.md` file (persistent memory/instructions)
+- Session state (conversation context)
+- Filesystem (isolated from other agents)
+- IPC namespace (can't send messages as other agents)
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/gavrielc/nanoclaw.git
-cd nanoclaw
-claude
+git clone https://github.com/RickConsole/hydra.git
+cd hydra
+npm install
+cp config-examples/hydra.yaml ./hydra.yaml
+# Edit hydra.yaml with your bot tokens and agent config
+npm run dev
 ```
 
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
+## Configuration
 
-## Philosophy
+Everything lives in one file: `hydra.yaml`
 
-**Small enough to understand.** One process, a few source files. No microservices, no message queues, no abstraction layers. Have Claude Code walk you through it.
+```yaml
+version: "1"
+project: my-assistant
 
-**Secure by isolation.** Agents run in Linux containers (Apple Container on macOS, or Docker). They can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
+# Bots (communication channels)
+bots:
+  merlin:
+    name: Merlin
+    token: env:TELEGRAM_BOT_TOKEN  # References .env variable
+    platform: telegram
 
-**Built for one user.** This isn't a framework. It's working software that fits my exact needs. You fork it and have Claude Code make it match your exact needs.
+# Agents (each runs in its own container)
+agents:
+  - name: Main Assistant
+    folder: main
+    trigger: "@Merlin"
+    bot: merlin
+    chat_id: "-1001234567890"
 
-**Customization = code changes.** No configuration sprawl. Want different behavior? Modify the code. The codebase is small enough that this is safe.
+  - name: Dev Helper
+    folder: dev
+    trigger: "@Dev"
+    bot: merlin
+    chat_id: "-1009876543210"
+    container:
+      image: hydra-agent:custom
+      timeout: 600000
+      mounts:
+        - host_path: ~/projects
+          container_path: src
+          readonly: false
 
-**AI-native.** No installation wizard; Claude Code guides setup. No monitoring dashboard; ask Claude what's happening. No debugging tools; describe the problem, Claude fixes it.
+# Security (mount allowlist lives separately for tamper-proofing)
+security:
+  mounts:
+    non_main_readonly: true
+    blocked_patterns:
+      - .ssh
+      - .gnupg
+      - password
+      - secret
 
-**Skills over features.** Contributors shouldn't add features (e.g. support for Telegram) to the codebase. Instead, they contribute [claude code skills](https://code.claude.com/docs/en/skills) like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
+# Optional integrations
+voice:
+  enabled: true
+  port: 3340
+  group: main
 
-**Best harness, best model.** This runs on Claude Agent SDK, which means you're running Claude Code directly. The harness matters. A bad harness makes even smart models seem dumb, a good harness gives them superpowers. Claude Code is (IMO) the best harness available.
+memory:
+  provider: mem0
+  endpoint: http://localhost:8080
+```
 
-## What It Supports
+### Environment Variables
 
-- **WhatsApp I/O** - Message Claude from your phone
-- **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted
-- **Main channel** - Your private channel (self-chat) for admin control; every other group is completely isolated
-- **Scheduled tasks** - Recurring jobs that run Claude and can message you back
-- **Web access** - Search and fetch content
-- **Container isolation** - Agents sandboxed in Apple Container (macOS) or Docker (macOS/Linux)
-- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
+Sensitive values use `env:VAR_NAME` syntax:
 
-## Usage
+```yaml
+token: env:TELEGRAM_BOT_TOKEN
+```
 
-Talk to your assistant with the trigger word (default: `@Andy`):
+Create a `.env` file:
 
 ```
-@Andy send an overview of the sales pipeline every weekday morning at 9am (has access to my Obsidian vault folder)
-@Andy review the git history for the past week each Friday and update the README if there's drift
-@Andy every Monday at 8am, compile news on AI developments from Hacker News and TechCrunch and message me a briefing
+TELEGRAM_BOT_TOKEN=123456:ABC...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-From the main channel (your self-chat), you can manage groups and tasks:
+### Mount Security
+
+The mount allowlist lives separately at `~/.config/hydra/mount-allowlist.json` — outside the container's reach. Even if an agent modifies `hydra.yaml`, it can't add mounts that aren't pre-approved.
+
+## Hydra Console (Web UI)
+
+Hydra includes a Next.js web interface for managing agents without Telegram:
+
+```bash
+cd hydra-console
+npm install
+npm run dev
+# Open http://localhost:3000
 ```
-@Andy list all scheduled tasks across groups
-@Andy pause the Monday briefing task
-@Andy join the Family Chat group
-```
 
-## Customizing
+**Features:**
+- 💬 Chat with any agent
+- 🤖 View agent status and logs
+- ⚙️ Edit `hydra.yaml` with validation
+- 🧠 Browse agent memories
+- 📜 Real-time log streaming
 
-There are no configuration files to learn. Just tell Claude Code what you want:
-
-- "Change the trigger word to @Bob"
-- "Remember in the future to make responses shorter and more direct"
-- "Add a custom greeting when I say good morning"
-- "Store conversation summaries weekly"
-
-Or run `/customize` for guided changes.
-
-The codebase is small enough that Claude can safely modify it.
-
-## Contributing
-
-**Don't add features. Add skills.**
-
-If you want to add Telegram support, don't create a PR that adds Telegram alongside WhatsApp. Instead, contribute a skill file (`.claude/skills/add-telegram/SKILL.md`) that teaches Claude Code how to transform a NanoClaw installation to use Telegram.
-
-Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
-
-### RFS (Request for Skills)
-
-Skills we'd love to see:
-
-**Communication Channels**
-- `/add-telegram` - Add Telegram as channel. Should give the user option to replace WhatsApp or add as additional channel. Also should be possible to add it as a control channel (where it can trigger actions) or just a channel that can be used in actions triggered elsewhere
-- `/add-slack` - Add Slack
-- `/add-discord` - Add Discord
-
-**Platform Support**
-- `/setup-windows` - Windows via WSL2 + Docker
-
-**Session Management**
-- `/add-clear` - Add a `/clear` command that compacts the conversation (summarizes context while preserving critical information in the same session). Requires figuring out how to trigger compaction programmatically via the Claude Agent SDK.
-
-## Requirements
-
-- macOS or Linux
-- Node.js 20+
-- [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+The console connects to the orchestrator's API (default port 3340).
 
 ## Architecture
 
 ```
-WhatsApp (baileys) --> SQLite --> Polling loop --> Container (Claude Agent SDK) --> Response
+hydra/
+├── src/
+│   ├── index.ts           # Orchestrator: routing, IPC, lifecycle
+│   ├── container-runner.ts # Spawns agent containers
+│   ├── task-scheduler.ts   # Scheduled/recurring tasks
+│   ├── hydra-config.ts     # Unified config loader
+│   ├── api/                # HTTP + WebSocket API for console
+│   └── db.ts               # SQLite for tasks, chat metadata
+├── groups/
+│   ├── main/              # Main agent's workspace
+│   │   └── CLAUDE.md      # Persistent memory
+│   └── dev/               # Dev agent's workspace
+│       └── CLAUDE.md
+├── hydra-console/         # Next.js web UI
+├── hydra.yaml             # Single config file
+└── data/                  # Sessions, IPC, database
 ```
 
-Single Node.js process. Agents execute in isolated Linux containers with mounted directories. IPC via filesystem. No daemons, no queues, no complexity.
+### Key Components
 
-Key files:
-- `src/index.ts` - Main app: WhatsApp connection, routing, IPC
-- `src/container-runner.ts` - Spawns agent containers
-- `src/task-scheduler.ts` - Runs scheduled tasks
-- `src/db.ts` - SQLite operations
-- `groups/*/CLAUDE.md` - Per-group memory
+**Orchestrator** (`src/index.ts`)
+- Connects to Telegram bots
+- Routes incoming messages to agents
+- Manages sessions and state
+- Processes IPC from containers (scheduled tasks, send_message)
 
-## FAQ
+**Container Runner** (`src/container-runner.ts`)
+- Builds volume mounts based on agent config
+- Spawns Docker or Apple Container
+- Captures output, handles timeouts
+- Syncs credentials for Claude auth
 
-**Why WhatsApp and not Telegram/Signal/etc?**
+**API Server** (`src/api/`)
+- REST endpoints for config, agents, chat, memory, logs
+- WebSocket for real-time updates
+- Powers the Hydra Console
 
-Because I use WhatsApp. Fork it and run a skill to change it. That's the whole point.
+## Supported Channels
 
-**Why Apple Container instead of Docker?**
+- **Telegram** — Primary channel, supports images and PDFs
+- **Web Console** — Built-in web UI for local use
+- **Voice** — Twilio + ElevenLabs integration
+- **SMS** — Via Twilio (shares voice webhook)
 
-On macOS, Apple Container is lightweight, fast, and optimized for Apple silicon. But Docker is also fully supported—during `/setup`, you can choose which runtime to use. On Linux, Docker is used automatically.
+## Requirements
 
-**Can I run this on Linux?**
+- Node.js 20+
+- Docker or Apple Container (macOS)
+- Telegram bot token (for Telegram channel)
+- Anthropic API key or Claude Code OAuth
 
-Yes. Run `/setup` and it will automatically configure Docker as the container runtime. Thanks to [@dotsetgreg](https://github.com/dotsetgreg) for contributing the `/convert-to-docker` skill.
+## Environment Variables
 
-**Is this secure?**
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | For Telegram | Bot token from @BotFather |
+| `ANTHROPIC_API_KEY` | One of these | API key for Claude |
+| `CLAUDE_CODE_OAUTH_TOKEN` | One of these | OAuth token from Claude Code |
+| `HYDRA_API_PORT` | No | API server port (default: 3340) |
+| `HYDRA_API_ENABLED` | No | Set to `false` to disable API |
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. You should still review what you're running, but the codebase is small enough that you actually can. See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
+## Security Model
 
-**Why no configuration files?**
+1. **Container isolation** — Each agent runs in a separate container
+2. **Explicit mounts** — Agents can only see mounted directories
+3. **IPC namespacing** — Agents can only send messages to their own chats
+4. **External allowlist** — Mount permissions live outside agent reach
+5. **Main privilege** — Only the `main` agent can register new groups
 
-We don't want configuration sprawl. Every user should customize it to so that the code matches exactly what they want rather than configuring a generic system. If you like having config files, tell Claude to add them.
+See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
 
-**How do I debug issues?**
+## Contributing
 
-Ask Claude Code. "Why isn't the scheduler running?" "What's in the recent logs?" "Why did this message not get a response?" That's the AI-native approach.
+Hydra is designed to be small enough to understand and modify. PRs welcome for:
 
-**Why isn't the setup working for me?**
+- Security fixes
+- Bug fixes
+- Clear improvements to core functionality
 
-I don't know. Run `claude`, then run `/debug`. If claude finds an issue that is likely affecting other users, open a PR to modify the setup SKILL.md.
-
-**What changes will be accepted into the codebase?**
-
-Security fixes, bug fixes, and clear improvements to the base configuration. That's it.
-
-Everything else (new capabilities, OS compatibility, hardware support, enhancements) should be contributed as skills.
-
-This keeps the base system minimal and lets every user customize their installation without inheriting features they don't want.
+For new features, consider whether they belong in core or as optional extensions.
 
 ## License
 
-MIT
+AGPL-3.0 (inherits from Wardgate integration)
