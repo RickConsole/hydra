@@ -1,0 +1,153 @@
+# Hydra Configuration
+# Single file that defines all bots, agents, security policies, and integrations
+
+version: "1"
+project: my-hydra-setup
+
+# =============================================================================
+# Bots (Communication Channels)
+# =============================================================================
+# Each bot is a messaging platform connection. Agents use bots to send/receive.
+
+bots:
+  anton:
+    name: Anton
+    token: env:ANTON_BOT_TOKEN  # Reference environment variable
+    platform: telegram
+
+  merlin:
+    name: Merlin
+    token: env:MERLIN_BOT_TOKEN
+    platform: telegram
+
+# =============================================================================
+# Agents
+# =============================================================================
+# Each agent is an AI assistant with its own persona, tools, and permissions.
+
+agents:
+  # Main agent - has admin privileges
+  - name: Main (Anton)
+    folder: main
+    trigger: "@Anton"
+    bot: anton
+    chat_id: "5446506042"  # Your personal chat ID
+
+  # Development assistant
+  - name: Merlin (Dev)
+    folder: merlin
+    trigger: "@Merlin"
+    bot: merlin
+    chat_id: "-1002318593798"
+    container:
+      image: nanoclaw-agent:latest
+      network_mode: bridge
+      timeout: 300000
+      mounts:
+        - host_path: ~/src/claymore
+          container_path: claymore
+          readonly: false
+        - host_path: ~/projects/obsidian/Claymore
+          container_path: obsidian
+          readonly: false
+
+  # Security/pentesting agent with elevated access
+  - name: Warmaster
+    folder: warmaster
+    trigger: "@Warmaster"
+    bot: anton
+    chat_id: "-1002345678901"
+    container:
+      image: nanoclaw-agent:warmaster  # Custom image with security tools
+      network_mode: host  # VPN access
+      timeout: 600000
+      mounts:
+        - host_path: ~/src
+          container_path: src
+          readonly: false
+
+# =============================================================================
+# Security
+# =============================================================================
+
+security:
+  mounts:
+    # Directories that can be mounted into containers
+    allowed_roots:
+      - path: ~/src
+        allow_read_write: true
+        description: Source code repositories
+
+      - path: ~/projects
+        allow_read_write: true
+        description: Project files
+
+      - path: ~/Documents
+        allow_read_write: false
+        description: Documents (read-only)
+
+    # Paths that should never be mounted (glob patterns)
+    blocked_patterns:
+      - password
+      - secret
+      - token
+      - .ssh
+      - .gnupg
+      - .aws/credentials
+
+    # Non-main agents can only have read-only mounts
+    non_main_readonly: true
+
+# =============================================================================
+# Voice Calling (Optional)
+# =============================================================================
+
+voice:
+  enabled: false
+  port: 3340
+  group: main
+  allowed_callers: []  # Phone numbers in E.164 format
+  greeting: "Hey, what's up?"
+  max_duration: 600000  # 10 minutes
+
+  twilio:
+    account_sid: env:TWILIO_ACCOUNT_SID
+    auth_token: env:TWILIO_AUTH_TOKEN
+    phone_number: env:TWILIO_PHONE_NUMBER
+
+  elevenlabs:
+    api_key: env:ELEVENLABS_API_KEY
+    voice_id: JBFqnCBsd6RMkjVDRZzb
+    model_id: eleven_turbo_v2_5
+
+  ngrok:
+    authtoken: env:NGROK_AUTHTOKEN
+    domain: env:NGROK_DOMAIN
+
+# =============================================================================
+# SMS (Optional)
+# =============================================================================
+
+sms:
+  enabled: false
+  group: main
+  allowed_senders: []  # Phone numbers in E.164 format
+
+# =============================================================================
+# Memory
+# =============================================================================
+
+memory:
+  provider: mem0
+  self_hosted: false
+  api_key: env:MEM0_API_KEY
+
+# =============================================================================
+# Runtime Settings
+# =============================================================================
+
+runtime:
+  poll_interval: 2000           # Message polling (ms)
+  scheduler_poll_interval: 60000  # Task scheduler (ms)
+  ipc_poll_interval: 1000       # IPC file watching (ms)
+  log_level: info               # trace, debug, info, warn, error

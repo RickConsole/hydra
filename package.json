@@ -1,7 +1,7 @@
 {
-  "name": "nanoclaw",
+  "name": "hydra",
   "version": "1.0.0",
-  "description": "Personal Claude assistant. Lightweight, secure, customizable.",
+  "description": "Secure AI agent platform. Container-isolated agents with unified configuration.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -9,6 +9,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "auth": "tsx src/whatsapp-auth.ts",
+    "config:migrate": "tsx src/cli/migrate-config.ts",
+    "config:validate": "tsx src/cli/validate-config.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\""
@@ -22,6 +24,7 @@
     "pino-pretty": "^13.0.0",
     "qrcode-terminal": "^0.12.0",
     "telegraf": "^4.16.3",
+    "yaml": "^2.7.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

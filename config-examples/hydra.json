@@ -1,0 +1,143 @@
+{
+  "version": "1",
+  "project": "my-hydra-setup",
+
+  "bots": {
+    "anton": {
+      "name": "Anton",
+      "token": "env:ANTON_BOT_TOKEN",
+      "platform": "telegram"
+    },
+    "merlin": {
+      "name": "Merlin",
+      "token": "env:MERLIN_BOT_TOKEN",
+      "platform": "telegram"
+    }
+  },
+
+  "agents": [
+    {
+      "name": "Main (Anton)",
+      "folder": "main",
+      "trigger": "@Anton",
+      "bot": "anton",
+      "chat_id": "5446506042"
+    },
+    {
+      "name": "Merlin (Dev)",
+      "folder": "merlin",
+      "trigger": "@Merlin",
+      "bot": "merlin",
+      "chat_id": "-1002318593798",
+      "container": {
+        "image": "nanoclaw-agent:latest",
+        "network_mode": "bridge",
+        "timeout": 300000,
+        "mounts": [
+          {
+            "host_path": "~/src/claymore",
+            "container_path": "claymore",
+            "readonly": false
+          },
+          {
+            "host_path": "~/projects/obsidian/Claymore",
+            "container_path": "obsidian",
+            "readonly": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "Warmaster",
+      "folder": "warmaster",
+      "trigger": "@Warmaster",
+      "bot": "anton",
+      "chat_id": "-1002345678901",
+      "container": {
+        "image": "nanoclaw-agent:warmaster",
+        "network_mode": "host",
+        "timeout": 600000,
+        "mounts": [
+          {
+            "host_path": "~/src",
+            "container_path": "src",
+            "readonly": false
+          }
+        ]
+      }
+    }
+  ],
+
+  "security": {
+    "mounts": {
+      "allowed_roots": [
+        {
+          "path": "~/src",
+          "allow_read_write": true,
+          "description": "Source code repositories"
+        },
+        {
+          "path": "~/projects",
+          "allow_read_write": true,
+          "description": "Project files"
+        },
+        {
+          "path": "~/Documents",
+          "allow_read_write": false,
+          "description": "Documents (read-only)"
+        }
+      ],
+      "blocked_patterns": [
+        "password",
+        "secret",
+        "token",
+        ".ssh",
+        ".gnupg",
+        ".aws/credentials"
+      ],
+      "non_main_readonly": true
+    }
+  },
+
+  "voice": {
+    "enabled": false,
+    "port": 3340,
+    "group": "main",
+    "allowed_callers": [],
+    "greeting": "Hey, what's up?",
+    "max_duration": 600000,
+    "twilio": {
+      "account_sid": "env:TWILIO_ACCOUNT_SID",
+      "auth_token": "env:TWILIO_AUTH_TOKEN",
+      "phone_number": "env:TWILIO_PHONE_NUMBER"
+    },
+    "elevenlabs": {
+      "api_key": "env:ELEVENLABS_API_KEY",
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "model_id": "eleven_turbo_v2_5"
+    },
+    "ngrok": {
+      "authtoken": "env:NGROK_AUTHTOKEN",
+      "domain": "env:NGROK_DOMAIN"
+    }
+  },
+
+  "sms": {
+    "enabled": false,
+    "group": "main",
+    "allowed_senders": []
+  },
+
+  "memory": {
+    "provider": "mem0",
+    "self_hosted": false,
+    "api_key": "env:MEM0_API_KEY"
+  },
+
+  "runtime": {
+    "poll_interval": 2000,
+    "scheduler_poll_interval": 60000,
+    "ipc_poll_interval": 1000,
+    "log_level": "info"
+  }
+}
