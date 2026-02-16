@@ -14,6 +14,11 @@ groups/*/conversations/
 # Secrets
 *.keys.json
 .env
+.env.local
+
+# Config files (user-specific)
+hydra.yaml
+mount-allowlist.json
 
 # OS
 .DS_Store
@@ -22,4 +27,6 @@ groups/*/conversations/
 .idea/
 .vscode/
 
+# Misc
 agents-sdk-docs
+*.log
