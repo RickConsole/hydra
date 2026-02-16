@@ -119,4 +119,22 @@ export const systemApi = {
   },
 };
 
+// Scheduled task endpoints
+export const taskApi = {
+  list: () =>
+    apiRequest<{ tasks: Array<import('@/types').ScheduledTask> }>('/api/tasks'),
+
+  get: (id: string) =>
+    apiRequest<{ task: import('@/types').ScheduledTask }>(`/api/tasks/${id}`),
+
+  pause: (id: string) =>
+    apiRequest<{ success: boolean }>(`/api/tasks/${id}/pause`, { method: 'POST' }),
+
+  resume: (id: string) =>
+    apiRequest<{ success: boolean }>(`/api/tasks/${id}/resume`, { method: 'POST' }),
+
+  cancel: (id: string) =>
+    apiRequest<{ success: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+};
+
 export { ORCHESTRATOR_URL };

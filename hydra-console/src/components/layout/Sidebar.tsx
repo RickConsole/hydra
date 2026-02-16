@@ -1,11 +1,12 @@
 'use client';
 
 import { useUIStore, useAgentStore } from '@/lib/store';
-import { MessageSquare, Bot, Settings, Brain, FileText } from 'lucide-react';
+import { MessageSquare, Bot, Settings, Brain, FileText, Calendar } from 'lucide-react';
 
 const navItems = [
   { id: 'chat' as const, label: 'Chat', icon: MessageSquare },
   { id: 'agents' as const, label: 'Agents', icon: Bot },
+  { id: 'tasks' as const, label: 'Tasks', icon: Calendar },
   { id: 'config' as const, label: 'Config', icon: Settings },
   { id: 'memory' as const, label: 'Memory', icon: Brain },
   { id: 'logs' as const, label: 'Logs', icon: FileText },

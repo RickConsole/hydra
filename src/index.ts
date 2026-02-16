@@ -822,6 +822,8 @@ async function processTaskIpc(
           schedule_value: data.schedule_value,
           context_mode: contextMode,
           next_run: nextRun,
+          last_run_status: null,
+          last_error: null,
           status: 'active',
           created_at: new Date().toISOString(),
         });

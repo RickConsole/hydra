@@ -1,52 +1,45 @@
 'use client';
 
-import type { Agent } from '@/types';
-import { agentApi } from '@/lib/api';
-import { Play, Square, RotateCcw, MessageSquare, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import type { Agent, AgentStatus } from '@/types';
+import { MessageSquare, FileText, Activity, Clock, AlertCircle } from 'lucide-react';
 import { useAgentStore, useUIStore } from '@/lib/store';
 
 interface AgentCardProps {
   agent: Agent;
-  onRefresh: () => void;
 }
 
-export function AgentCard({ agent, onRefresh }: AgentCardProps) {
-  const [loading, setLoading] = useState<'start' | 'stop' | 'restart' | null>(null);
+export function AgentCard({ agent }: AgentCardProps) {
   const { selectAgent } = useAgentStore();
   const { setActiveTab } = useUIStore();
 
-  const statusColors: Record<Agent['status'], string> = {
-    running: 'bg-green-500',
-    stopped: 'bg-zinc-500',
-    error: 'bg-red-500',
-    starting: 'bg-yellow-500 animate-pulse',
+  const statusConfig: Record<AgentStatus, { color: string; label: string; description: string }> = {
+    ready: {
+      color: 'bg-green-500',
+      label: 'Ready',
+      description: 'Waiting for messages',
+    },
+    processing: {
+      color: 'bg-blue-500 animate-pulse',
+      label: 'Processing',
+      description: 'Handling a request',
+    },
+    error: {
+      color: 'bg-red-500',
+      label: 'Error',
+      description: agent.lastError || 'Configuration error',
+    },
   };
 
-  const statusLabels: Record<Agent['status'], string> = {
-    running: 'Running',
-    stopped: 'Stopped',
-    error: 'Error',
-    starting: 'Starting...',
-  };
-
-  const handleAction = async (action: 'start' | 'stop' | 'restart') => {
-    setLoading(action);
-    try {
-      if (action === 'start') await agentApi.start(agent.id);
-      else if (action === 'stop') await agentApi.stop(agent.id);
-      else await agentApi.restart(agent.id);
-      onRefresh();
-    } catch (error) {
-      console.error(`Failed to ${action} agent:`, error);
-    } finally {
-      setLoading(null);
-    }
-  };
+  const status = statusConfig[agent.status];
 
   const openChat = () => {
     selectAgent(agent.id);
     setActiveTab('chat');
+  };
+
+  const openLogs = () => {
+    selectAgent(agent.id);
+    setActiveTab('logs');
   };
 
   return (
@@ -55,94 +48,90 @@ export function AgentCard({ agent, onRefresh }: AgentCardProps) {
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="font-medium text-white">{agent.name}</h3>
-          <p className="text-xs text-zinc-500 font-mono">{agent.id}</p>
+          <p className="text-xs text-zinc-500">{agent.platform}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${statusColors[agent.status]}`} />
-          <span className="text-xs text-zinc-400">{statusLabels[agent.status]}</span>
+          <span className={`w-2 h-2 rounded-full ${status.color}`} />
+          <span className="text-xs text-zinc-400">{status.label}</span>
         </div>
       </div>
 
-      {/* Info */}
-      <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-        <div>
-          <span className="text-zinc-500">Platform:</span>
-          <span className="text-zinc-300 ml-2">{agent.platform}</span>
+      {/* Status description for error state */}
+      {agent.status === 'error' && (
+        <div className="flex items-start gap-2 mb-3 p-2 bg-red-500/10 rounded-lg">
+          <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-red-400">{status.description}</p>
         </div>
-        <div>
-          <span className="text-zinc-500">Folder:</span>
-          <span className="text-zinc-300 ml-2 font-mono text-xs">{agent.groupFolder}</span>
-        </div>
-        {agent.uptime !== undefined && (
-          <div className="col-span-2">
-            <span className="text-zinc-500">Uptime:</span>
-            <span className="text-zinc-300 ml-2">{formatUptime(agent.uptime)}</span>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {/* Last Active */}
+        <div className="flex items-center gap-2">
+          <Clock size={14} className="text-zinc-500" />
+          <div className="text-sm">
+            <span className="text-zinc-300">
+              {agent.lastActive ? formatRelativeTime(new Date(agent.lastActive)) : 'Never'}
+            </span>
           </div>
+        </div>
+
+        {/* Active containers */}
+        <div className="flex items-center gap-2">
+          <Activity size={14} className="text-zinc-500" />
+          <div className="text-sm">
+            <span className="text-zinc-300">
+              {agent.activeContainers || 0} active
+            </span>
+          </div>
+        </div>
+
+        {/* Request stats if available */}
+        {agent.stats && (
+          <>
+            <div className="text-sm">
+              <span className="text-zinc-500">Today:</span>
+              <span className="text-zinc-300 ml-1">{agent.stats.requestsToday} requests</span>
+            </div>
+            <div className="text-sm">
+              <span className="text-zinc-500">Avg:</span>
+              <span className="text-zinc-300 ml-1">{agent.stats.avgResponseTime.toFixed(1)}s</span>
+            </div>
+          </>
         )}
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {agent.status === 'running' ? (
-          <>
-            <button
-              onClick={() => handleAction('stop')}
-              disabled={loading !== null}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 text-red-400 rounded-lg text-sm hover:bg-red-600/30 disabled:opacity-50 transition-colors"
-            >
-              {loading === 'stop' ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Square size={14} />
-              )}
-              Stop
-            </button>
-            <button
-              onClick={() => handleAction('restart')}
-              disabled={loading !== null}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700 text-zinc-300 rounded-lg text-sm hover:bg-zinc-600 disabled:opacity-50 transition-colors"
-            >
-              {loading === 'restart' ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RotateCcw size={14} />
-              )}
-              Restart
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => handleAction('start')}
-            disabled={loading !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 text-green-400 rounded-lg text-sm hover:bg-green-600/30 disabled:opacity-50 transition-colors"
-          >
-            {loading === 'start' ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Play size={14} />
-            )}
-            Start
-          </button>
-        )}
-
-        <div className="flex-1" />
-
         <button
           onClick={openChat}
-          disabled={agent.status !== 'running'}
+          disabled={agent.status === 'error'}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg text-sm hover:bg-blue-600/30 disabled:opacity-50 transition-colors"
         >
           <MessageSquare size={14} />
           Chat
+        </button>
+
+        <button
+          onClick={openLogs}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700 text-zinc-300 rounded-lg text-sm hover:bg-zinc-600 transition-colors"
+        >
+          <FileText size={14} />
+          Logs
         </button>
       </div>
     </div>
   );
 }
 
-function formatUptime(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-  return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
+function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+  return date.toLocaleDateString();
 }

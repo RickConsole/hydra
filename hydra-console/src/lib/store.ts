@@ -102,7 +102,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
 
 // UI store
 interface UIState {
-  activeTab: 'chat' | 'agents' | 'config' | 'memory' | 'logs';
+  activeTab: 'chat' | 'agents' | 'tasks' | 'config' | 'memory' | 'logs';
   sidebarOpen: boolean;
   setActiveTab: (tab: UIState['activeTab']) => void;
   toggleSidebar: () => void;

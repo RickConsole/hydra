@@ -19,19 +19,62 @@ import {
   MAIN_GROUP_FOLDER,
 } from '../config.js';
 import type { RegisteredGroup } from '../types.js';
-import type { Agent } from './server.js';
+import type { Agent, AgentStatus, ScheduledTask } from './server.js';
+import { getAllTasks, pauseTask as dbPauseTask, resumeTask as dbResumeTask, deleteTask as dbDeleteTask, getTask as dbGetTask } from '../db.js';
 import { logger } from '../logger.js';
 import { runContainerAgent, writeGroupsSnapshot, writeTasksSnapshot } from '../container-runner.js';
-import { getAllTasks } from '../db.js';
 
 // In-memory state tracking for agents
 interface AgentState {
-  status: 'running' | 'stopped' | 'error' | 'starting';
-  startedAt?: Date;
+  status: AgentStatus;
+  lastActive?: Date;
+  activeContainers: number;
+  requestsToday: number;
+  totalRequests: number;
+  totalResponseTime: number; // for calculating average
   lastError?: string;
 }
 
 const agentStates = new Map<string, AgentState>();
+
+// Get or create agent state
+function getAgentState(agentId: string): AgentState {
+  let state = agentStates.get(agentId);
+  if (!state) {
+    state = {
+      status: 'ready',
+      activeContainers: 0,
+      requestsToday: 0,
+      totalRequests: 0,
+      totalResponseTime: 0,
+    };
+    agentStates.set(agentId, state);
+  }
+  return state;
+}
+
+// Update agent state when processing starts
+export function markAgentProcessing(agentId: string): void {
+  const state = getAgentState(agentId);
+  state.status = 'processing';
+  state.activeContainers++;
+  agentStates.set(agentId, state);
+}
+
+// Update agent state when processing ends
+export function markAgentReady(agentId: string, responseTimeMs: number, error?: string): void {
+  const state = getAgentState(agentId);
+  state.activeContainers = Math.max(0, state.activeContainers - 1);
+  state.status = state.activeContainers > 0 ? 'processing' : (error ? 'error' : 'ready');
+  state.lastActive = new Date();
+  state.requestsToday++;
+  state.totalRequests++;
+  state.totalResponseTime += responseTimeMs;
+  if (error) {
+    state.lastError = error;
+  }
+  agentStates.set(agentId, state);
+}
 
 // Log buffer for streaming logs
 const logBuffer: string[] = [];
@@ -166,16 +209,11 @@ export function getAgents(): Agent[] {
   const agents: Agent[] = [];
 
   for (const [jid, group] of Object.entries(groups)) {
-    // Extract platform from JID (telegram:bot:chatid -> telegram)
+    // Extract platform from JID (telegram:bot:chatid -> telegram, web:console:folder -> web)
     const platform = jid.split(':')[0] || 'unknown';
 
-    // Get or create state - agents are "running" if Hydra is running
-    let state = agentStates.get(group.folder);
-    if (!state) {
-      // Default to running since Hydra manages the lifecycle
-      state = { status: 'running', startedAt: new Date() };
-      agentStates.set(group.folder, state);
-    }
+    // Get or create state
+    const state = getAgentState(group.folder);
 
     agents.push({
       id: group.folder,
@@ -183,9 +221,14 @@ export function getAgents(): Agent[] {
       status: state.status,
       platform,
       groupFolder: group.folder,
-      uptime: state.startedAt
-        ? Math.floor((Date.now() - state.startedAt.getTime()) / 1000)
-        : undefined,
+      lastActive: state.lastActive,
+      activeContainers: state.activeContainers,
+      stats: state.totalRequests > 0 ? {
+        requestsToday: state.requestsToday,
+        avgResponseTime: state.totalResponseTime / state.totalRequests / 1000, // convert to seconds
+        totalRequests: state.totalRequests,
+      } : undefined,
+      lastError: state.lastError,
     });
   }
 
@@ -206,27 +249,21 @@ function findGroupByFolder(folder: string): { jid: string; group: RegisteredGrou
 }
 
 // Agent lifecycle management
-// Note: In Hydra, agents are always "running" as long as the orchestrator is up
-// These are here for future use if we add per-agent start/stop
+// Note: In Hydra, ephemeral agents are always "ready" - these functions are no-ops
+// but kept for API compatibility. The actual status is managed by markAgentProcessing/markAgentReady.
 export async function startAgent(agentId: string): Promise<void> {
-  const state = agentStates.get(agentId) || { status: 'stopped' };
-  state.status = 'running';
-  state.startedAt = new Date();
-  agentStates.set(agentId, state);
-  logger.info({ agentId }, 'Agent started');
+  // No-op for ephemeral agents - they're always ready
+  logger.info({ agentId }, 'Agent start requested (no-op for ephemeral agents)');
 }
 
 export async function stopAgent(agentId: string): Promise<void> {
-  const state = agentStates.get(agentId) || { status: 'stopped' };
-  state.status = 'stopped';
-  state.startedAt = undefined;
-  agentStates.set(agentId, state);
-  logger.info({ agentId }, 'Agent stopped');
+  // No-op for ephemeral agents
+  logger.info({ agentId }, 'Agent stop requested (no-op for ephemeral agents)');
 }
 
 export async function restartAgent(agentId: string): Promise<void> {
-  await stopAgent(agentId);
-  await startAgent(agentId);
+  // No-op for ephemeral agents
+  logger.info({ agentId }, 'Agent restart requested (no-op for ephemeral agents)');
 }
 
 /**
@@ -247,62 +284,77 @@ export async function sendChatMessage(agentId: string, message: string): Promise
 
   logger.info({ agentId, jid, isMain, hasSession: !!sessionId }, 'Sending chat message to agent');
 
-  // Build the prompt in the expected format
-  const timestamp = new Date().toISOString();
-  const escapeXml = (s: string) =>
-    s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  // Mark agent as processing
+  markAgentProcessing(agentId);
+  const startTime = Date.now();
 
-  const prompt = `<messages>\n<message sender="WebConsole" time="${timestamp}">${escapeXml(message)}</message>\n</messages>`;
+  try {
+    // Build the prompt in the expected format
+    const timestamp = new Date().toISOString();
+    const escapeXml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 
-  // Update tasks snapshot for container to read
-  const tasks = getAllTasks();
-  writeTasksSnapshot(
-    group.folder,
-    isMain,
-    tasks.map((t) => ({
-      id: t.id,
-      groupFolder: t.group_folder,
-      prompt: t.prompt,
-      schedule_type: t.schedule_type,
-      schedule_value: t.schedule_value,
-      status: t.status,
-      next_run: t.next_run,
-    })),
-  );
+    const prompt = `<messages>\n<message sender="WebConsole" time="${timestamp}">${escapeXml(message)}</message>\n</messages>`;
 
-  // Write groups snapshot
-  writeGroupsSnapshot(
-    group.folder,
-    isMain,
-    [],
-    new Set(Object.keys(registeredGroups)),
-  );
+    // Update tasks snapshot for container to read
+    const tasks = getAllTasks();
+    writeTasksSnapshot(
+      group.folder,
+      isMain,
+      tasks.map((t) => ({
+        id: t.id,
+        groupFolder: t.group_folder,
+        prompt: t.prompt,
+        schedule_type: t.schedule_type,
+        schedule_value: t.schedule_value,
+        status: t.status,
+        next_run: t.next_run,
+      })),
+    );
 
-  // Run the container agent
-  const output = await runContainerAgent(group, {
-    prompt,
-    sessionId,
-    groupFolder: group.folder,
-    chatJid: `web:console:${agentId}`, // JID for web console chat
-    isMain,
-  });
+    // Write groups snapshot
+    writeGroupsSnapshot(
+      group.folder,
+      isMain,
+      [],
+      new Set(Object.keys(registeredGroups)),
+    );
 
-  // Update session if we got a new one
-  if (output.newSessionId && deps) {
-    const updatedSessions = { ...deps.getSessions(), [group.folder]: output.newSessionId };
-    deps.setSessions(updatedSessions);
+    // Run the container agent
+    const output = await runContainerAgent(group, {
+      prompt,
+      sessionId,
+      groupFolder: group.folder,
+      chatJid: `web:console:${agentId}`, // JID for web console chat
+      isMain,
+    });
+
+    // Update session if we got a new one
+    if (output.newSessionId && deps) {
+      const updatedSessions = { ...deps.getSessions(), [group.folder]: output.newSessionId };
+      deps.setSessions(updatedSessions);
+    }
+
+    const responseTime = Date.now() - startTime;
+
+    if (output.status === 'error') {
+      markAgentReady(agentId, responseTime, output.error);
+      logger.error({ agentId, error: output.error }, 'Agent returned error');
+      throw new Error(output.error || 'Agent error');
+    }
+
+    markAgentReady(agentId, responseTime);
+    return output.result || '';
+  } catch (err) {
+    const responseTime = Date.now() - startTime;
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    markAgentReady(agentId, responseTime, errorMsg);
+    throw err;
   }
-
-  if (output.status === 'error') {
-    logger.error({ agentId, error: output.error }, 'Agent returned error');
-    throw new Error(output.error || 'Agent error');
-  }
-
-  return output.result || '';
 }
 
 // Memory operations
@@ -340,6 +392,58 @@ export function getLogs(agentId?: string, lines: number = 100): string[] {
   return logs.slice(-lines);
 }
 
+// Scheduled task functions
+export function getTasks(): ScheduledTask[] {
+  const dbTasks = getAllTasks();
+  return dbTasks.map((t) => ({
+    id: t.id,
+    agentId: t.group_folder,
+    prompt: t.prompt,
+    scheduleType: t.schedule_type as ScheduledTask['scheduleType'],
+    scheduleValue: t.schedule_value,
+    status: t.status as ScheduledTask['status'],
+    nextRun: t.next_run ? new Date(t.next_run) : undefined,
+    lastRun: t.last_run ? new Date(t.last_run) : undefined,
+    lastRunStatus: t.last_run_status as ScheduledTask['lastRunStatus'],
+    lastError: t.last_error || undefined,
+    createdAt: new Date(t.created_at),
+  }));
+}
+
+export function getTask(taskId: string): ScheduledTask | undefined {
+  const t = dbGetTask(taskId);
+  if (!t) return undefined;
+
+  return {
+    id: t.id,
+    agentId: t.group_folder,
+    prompt: t.prompt,
+    scheduleType: t.schedule_type as ScheduledTask['scheduleType'],
+    scheduleValue: t.schedule_value,
+    status: t.status as ScheduledTask['status'],
+    nextRun: t.next_run ? new Date(t.next_run) : undefined,
+    lastRun: t.last_run ? new Date(t.last_run) : undefined,
+    lastRunStatus: t.last_run_status as ScheduledTask['lastRunStatus'],
+    lastError: t.last_error || undefined,
+    createdAt: new Date(t.created_at),
+  };
+}
+
+export async function pauseTask(taskId: string): Promise<void> {
+  dbPauseTask(taskId);
+  logger.info({ taskId }, 'Task paused');
+}
+
+export async function resumeTask(taskId: string): Promise<void> {
+  dbResumeTask(taskId);
+  logger.info({ taskId }, 'Task resumed');
+}
+
+export async function cancelTask(taskId: string): Promise<void> {
+  dbDeleteTask(taskId);
+  logger.info({ taskId }, 'Task cancelled');
+}
+
 // Create the full API context
 export function createApiContext() {
   return {
@@ -355,5 +459,11 @@ export function createApiContext() {
     searchMemories,
     deleteMemory,
     getLogs,
+    // Task methods
+    getTasks,
+    getTask,
+    pauseTask,
+    resumeTask,
+    cancelTask,
   };
 }

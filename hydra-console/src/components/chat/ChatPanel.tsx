@@ -124,8 +124,10 @@ export function ChatPanel() {
         <div className="flex items-center gap-2">
           <div
             className={`w-2 h-2 rounded-full ${
-              selectedAgent?.status === 'running'
+              selectedAgent?.status === 'ready'
                 ? 'bg-green-500'
+                : selectedAgent?.status === 'processing'
+                ? 'bg-blue-500 animate-pulse'
                 : selectedAgent?.status === 'error'
                 ? 'bg-red-500'
                 : 'bg-zinc-500'
@@ -178,12 +180,14 @@ export function ChatPanel() {
       {/* Input */}
       <ChatInput
         onSend={handleSend}
-        disabled={!isConnected || selectedAgent?.status !== 'running'}
+        disabled={!isConnected || selectedAgent?.status === 'error'}
         placeholder={
           !isConnected
             ? 'Connecting...'
-            : selectedAgent?.status !== 'running'
-            ? 'Agent is not running'
+            : selectedAgent?.status === 'error'
+            ? 'Agent has an error - check config'
+            : selectedAgent?.status === 'processing'
+            ? 'Processing...'
             : 'Type a message...'
         }
       />

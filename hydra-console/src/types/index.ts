@@ -1,14 +1,24 @@
 // Hydra Console Types
 
 // Agent types
+export type AgentStatus = 'ready' | 'processing' | 'error';
+
 export interface Agent {
   id: string;
   name: string;
-  status: 'running' | 'stopped' | 'error' | 'starting';
+  status: AgentStatus;
   platform: string;
   groupFolder: string;
-  uptime?: number;
-  lastMessage?: string;
+  lastActive?: Date;
+  activeContainers?: number;
+  stats?: AgentStats;
+  lastError?: string;
+}
+
+export interface AgentStats {
+  requestsToday: number;
+  avgResponseTime: number; // in seconds
+  totalRequests: number;
 }
 
 // Chat types
@@ -95,6 +105,24 @@ export interface RuntimeConfig {
     memory?: string;
     cpu?: string;
   };
+}
+
+// Scheduled task types
+export type ScheduleType = 'cron' | 'interval' | 'once';
+export type TaskStatus = 'active' | 'paused' | 'completed' | 'failed';
+
+export interface ScheduledTask {
+  id: string;
+  agentId: string;
+  prompt: string;
+  scheduleType: ScheduleType;
+  scheduleValue: string;
+  status: TaskStatus;
+  nextRun?: Date;
+  lastRun?: Date;
+  lastRunStatus?: 'success' | 'error';
+  lastError?: string;
+  createdAt: Date;
 }
 
 // Memory types

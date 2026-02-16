@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { AgentsPanel } from '@/components/agents/AgentsPanel';
+import { TasksPanel } from '@/components/tasks/TasksPanel';
 import { ConfigEditor } from '@/components/config/ConfigEditor';
 import { MemoryPanel } from '@/components/memory/MemoryPanel';
 import { LogsPanel } from '@/components/logs/LogsPanel';
@@ -19,6 +20,7 @@ export default function Home() {
         <Header />
         {activeTab === 'chat' && <ChatPanel />}
         {activeTab === 'agents' && <AgentsPanel />}
+        {activeTab === 'tasks' && <TasksPanel />}
         {activeTab === 'config' && <ConfigEditor />}
         {activeTab === 'memory' && <MemoryPanel />}
         {activeTab === 'logs' && <LogsPanel />}

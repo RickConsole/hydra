@@ -41,9 +41,12 @@ export function initDatabase(): void {
       prompt TEXT NOT NULL,
       schedule_type TEXT NOT NULL,
       schedule_value TEXT NOT NULL,
+      context_mode TEXT DEFAULT 'isolated',
       next_run TEXT,
       last_run TEXT,
       last_result TEXT,
+      last_run_status TEXT,
+      last_error TEXT,
       status TEXT DEFAULT 'active',
       created_at TEXT NOT NULL
     );
@@ -75,6 +78,20 @@ export function initDatabase(): void {
     db.exec(
       `ALTER TABLE scheduled_tasks ADD COLUMN context_mode TEXT DEFAULT 'isolated'`,
     );
+  } catch {
+    /* column already exists */
+  }
+
+  // Add last_run_status column if it doesn't exist (migration for existing DBs)
+  try {
+    db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN last_run_status TEXT`);
+  } catch {
+    /* column already exists */
+  }
+
+  // Add last_error column if it doesn't exist (migration for existing DBs)
+  try {
+    db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN last_error TEXT`);
   } catch {
     /* column already exists */
   }
@@ -275,6 +292,19 @@ export function getTaskById(id: string): ScheduledTask | undefined {
   return db.prepare('SELECT * FROM scheduled_tasks WHERE id = ?').get(id) as
     | ScheduledTask
     | undefined;
+}
+
+// Alias for getTaskById
+export const getTask = getTaskById;
+
+// Pause a task (set status to 'paused')
+export function pauseTask(id: string): void {
+  updateTask(id, { status: 'paused' });
+}
+
+// Resume a paused task (set status to 'active')
+export function resumeTask(id: string): void {
+  updateTask(id, { status: 'active' });
 }
 
 export function getTasksForGroup(groupFolder: string): ScheduledTask[] {

@@ -35,9 +35,15 @@ export function AgentsPanel() {
     const unsubscribe = subscribe('agent:status', (event) => {
       const payload = event.payload as {
         agentId: string;
-        status: import('@/types').Agent['status'];
+        status: import('@/types').AgentStatus;
+        activeContainers?: number;
+        lastActive?: string;
       };
-      updateAgent(payload.agentId, { status: payload.status });
+      updateAgent(payload.agentId, {
+        status: payload.status,
+        activeContainers: payload.activeContainers,
+        lastActive: payload.lastActive ? new Date(payload.lastActive) : undefined,
+      });
     });
 
     return unsubscribe;
@@ -79,7 +85,7 @@ export function AgentsPanel() {
     <div className="flex-1 overflow-y-auto bg-zinc-950 p-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
         {agents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} onRefresh={loadAgents} />
+          <AgentCard key={agent.id} agent={agent} />
         ))}
       </div>
     </div>

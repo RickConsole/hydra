@@ -14,14 +14,39 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { logger } from '../logger.js';
 
 // Types
+export type AgentStatus = 'ready' | 'processing' | 'error';
+
 export interface Agent {
   id: string;
   name: string;
-  status: 'running' | 'stopped' | 'error' | 'starting';
+  status: AgentStatus;
   platform: string;
   groupFolder: string;
-  uptime?: number;
-  lastMessage?: string;
+  lastActive?: Date;
+  activeContainers?: number;
+  stats?: {
+    requestsToday: number;
+    avgResponseTime: number;
+    totalRequests: number;
+  };
+  lastError?: string;
+}
+
+export type ScheduleType = 'cron' | 'interval' | 'once';
+export type TaskStatus = 'active' | 'paused' | 'completed' | 'failed';
+
+export interface ScheduledTask {
+  id: string;
+  agentId: string;
+  prompt: string;
+  scheduleType: ScheduleType;
+  scheduleValue: string;
+  status: TaskStatus;
+  nextRun?: Date;
+  lastRun?: Date;
+  lastRunStatus?: 'success' | 'error';
+  lastError?: string;
+  createdAt: Date;
 }
 
 export interface WsEvent {
@@ -43,6 +68,12 @@ interface ApiContext {
   searchMemories: (agentId: string, query: string) => Promise<Array<{ id: string; content: string; createdAt: string }>>;
   deleteMemory: (agentId: string, memoryId: string) => Promise<void>;
   getLogs: (agentId?: string, lines?: number) => string[];
+  // Scheduled task methods
+  getTasks: () => ScheduledTask[];
+  getTask: (taskId: string) => ScheduledTask | undefined;
+  pauseTask: (taskId: string) => Promise<void>;
+  resumeTask: (taskId: string) => Promise<void>;
+  cancelTask: (taskId: string) => Promise<void>;
 }
 
 // Connected WebSocket clients
@@ -296,6 +327,48 @@ addRoute('GET', '/api/logs', async (req, res, params, ctx) => {
   const lines = parseInt(url.searchParams.get('lines') || '100', 10);
   const logs = ctx.getLogs(agentId, lines);
   sendJson(res, 200, { logs });
+});
+
+// Scheduled task endpoints
+addRoute('GET', '/api/tasks', async (req, res, params, ctx) => {
+  const tasks = ctx.getTasks();
+  sendJson(res, 200, { tasks });
+});
+
+addRoute('GET', '/api/tasks/:id', async (req, res, params, ctx) => {
+  const task = ctx.getTask(params.id);
+  if (!task) {
+    sendError(res, 404, 'Task not found');
+    return;
+  }
+  sendJson(res, 200, { task });
+});
+
+addRoute('POST', '/api/tasks/:id/pause', async (req, res, params, ctx) => {
+  try {
+    await ctx.pauseTask(params.id);
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    sendError(res, 500, err instanceof Error ? err.message : 'Failed to pause task');
+  }
+});
+
+addRoute('POST', '/api/tasks/:id/resume', async (req, res, params, ctx) => {
+  try {
+    await ctx.resumeTask(params.id);
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    sendError(res, 500, err instanceof Error ? err.message : 'Failed to resume task');
+  }
+});
+
+addRoute('DELETE', '/api/tasks/:id', async (req, res, params, ctx) => {
+  try {
+    await ctx.cancelTask(params.id);
+    sendJson(res, 200, { success: true });
+  } catch (err) {
+    sendError(res, 500, err instanceof Error ? err.message : 'Failed to cancel task');
+  }
 });
 
 // Create and start the API server
