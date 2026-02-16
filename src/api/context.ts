@@ -16,11 +16,13 @@ import {
 import {
   DATA_DIR,
   loadRegisteredGroups,
-  isUsingUnifiedConfig,
+  MAIN_GROUP_FOLDER,
 } from '../config.js';
 import type { RegisteredGroup } from '../types.js';
 import type { Agent } from './server.js';
 import { logger } from '../logger.js';
+import { runContainerAgent, writeGroupsSnapshot, writeTasksSnapshot } from '../container-runner.js';
+import { getAllTasks } from '../db.js';
 
 // In-memory state tracking for agents
 interface AgentState {
@@ -40,6 +42,22 @@ export function appendLog(line: string): void {
   if (logBuffer.length > MAX_LOG_LINES) {
     logBuffer.shift();
   }
+}
+
+// Dependencies injected from main orchestrator
+interface ContextDependencies {
+  getRegisteredGroups: () => Record<string, RegisteredGroup>;
+  getSessions: () => Record<string, string>;
+  setSessions: (sessions: Record<string, string>) => void;
+}
+
+let deps: ContextDependencies | null = null;
+
+/**
+ * Initialize context with dependencies from the orchestrator
+ */
+export function initContext(dependencies: ContextDependencies): void {
+  deps = dependencies;
 }
 
 // Helper to get config file path
@@ -144,17 +162,18 @@ export async function updateConfig(
 
 // Get list of agents from config
 export function getAgents(): Agent[] {
-  const groups = loadRegisteredGroups();
+  const groups = deps?.getRegisteredGroups() || loadRegisteredGroups();
   const agents: Agent[] = [];
 
   for (const [jid, group] of Object.entries(groups)) {
     // Extract platform from JID (telegram:bot:chatid -> telegram)
     const platform = jid.split(':')[0] || 'unknown';
 
-    // Get or create state
+    // Get or create state - agents are "running" if Hydra is running
     let state = agentStates.get(group.folder);
     if (!state) {
-      state = { status: 'stopped' };
+      // Default to running since Hydra manages the lifecycle
+      state = { status: 'running', startedAt: new Date() };
       agentStates.set(group.folder, state);
     }
 
@@ -173,20 +192,27 @@ export function getAgents(): Agent[] {
   return agents;
 }
 
+// Find group by folder name
+function findGroupByFolder(folder: string): { jid: string; group: RegisteredGroup } | null {
+  const groups = deps?.getRegisteredGroups() || loadRegisteredGroups();
+
+  for (const [jid, group] of Object.entries(groups)) {
+    if (group.folder === folder) {
+      return { jid, group };
+    }
+  }
+
+  return null;
+}
+
 // Agent lifecycle management
-// Note: These are placeholders - actual implementation depends on container management
+// Note: In Hydra, agents are always "running" as long as the orchestrator is up
+// These are here for future use if we add per-agent start/stop
 export async function startAgent(agentId: string): Promise<void> {
   const state = agentStates.get(agentId) || { status: 'stopped' };
-  state.status = 'starting';
-  agentStates.set(agentId, state);
-
-  // Simulate startup delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   state.status = 'running';
   state.startedAt = new Date();
   agentStates.set(agentId, state);
-
   logger.info({ agentId }, 'Agent started');
 }
 
@@ -195,7 +221,6 @@ export async function stopAgent(agentId: string): Promise<void> {
   state.status = 'stopped';
   state.startedAt = undefined;
   agentStates.set(agentId, state);
-
   logger.info({ agentId }, 'Agent stopped');
 }
 
@@ -204,19 +229,80 @@ export async function restartAgent(agentId: string): Promise<void> {
   await startAgent(agentId);
 }
 
-// Chat with agent
-// Note: This is a placeholder - actual implementation needs to invoke the container
+/**
+ * Send a chat message to an agent and get a response
+ * This actually invokes the container agent
+ */
 export async function sendChatMessage(agentId: string, message: string): Promise<string> {
-  logger.info({ agentId, messageLength: message.length }, 'Chat message received');
+  const match = findGroupByFolder(agentId);
+  if (!match) {
+    throw new Error(`Agent not found: ${agentId}`);
+  }
 
-  // Placeholder response
-  // In real implementation, this would:
-  // 1. Find the agent's group folder
-  // 2. Build the prompt
-  // 3. Call runContainerAgent
-  // 4. Return the response
+  const { jid, group } = match;
+  const isMain = group.folder === MAIN_GROUP_FOLDER;
+  const sessions = deps?.getSessions() || {};
+  const sessionId = sessions[group.folder];
+  const registeredGroups = deps?.getRegisteredGroups() || loadRegisteredGroups();
 
-  return `[Placeholder] Agent "${agentId}" received: "${message.slice(0, 50)}..."`;
+  logger.info({ agentId, jid, isMain, hasSession: !!sessionId }, 'Sending chat message to agent');
+
+  // Build the prompt in the expected format
+  const timestamp = new Date().toISOString();
+  const escapeXml = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  const prompt = `<messages>\n<message sender="WebConsole" time="${timestamp}">${escapeXml(message)}</message>\n</messages>`;
+
+  // Update tasks snapshot for container to read
+  const tasks = getAllTasks();
+  writeTasksSnapshot(
+    group.folder,
+    isMain,
+    tasks.map((t) => ({
+      id: t.id,
+      groupFolder: t.group_folder,
+      prompt: t.prompt,
+      schedule_type: t.schedule_type,
+      schedule_value: t.schedule_value,
+      status: t.status,
+      next_run: t.next_run,
+    })),
+  );
+
+  // Write groups snapshot
+  writeGroupsSnapshot(
+    group.folder,
+    isMain,
+    [],
+    new Set(Object.keys(registeredGroups)),
+  );
+
+  // Run the container agent
+  const output = await runContainerAgent(group, {
+    prompt,
+    sessionId,
+    groupFolder: group.folder,
+    chatJid: `web:console:${agentId}`, // JID for web console chat
+    isMain,
+  });
+
+  // Update session if we got a new one
+  if (output.newSessionId && deps) {
+    const updatedSessions = { ...deps.getSessions(), [group.folder]: output.newSessionId };
+    deps.setSessions(updatedSessions);
+  }
+
+  if (output.status === 'error') {
+    logger.error({ agentId, error: output.error }, 'Agent returned error');
+    throw new Error(output.error || 'Agent error');
+  }
+
+  return output.result || '';
 }
 
 // Memory operations

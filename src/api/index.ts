@@ -5,5 +5,5 @@
  */
 
 export { createApiServer, stopApiServer, broadcastEvent } from './server.js';
-export { createApiContext, appendLog } from './context.js';
+export { createApiContext, appendLog, initContext } from './context.js';
 export type { Agent, WsEvent } from './server.js';

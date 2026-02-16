@@ -40,7 +40,7 @@ import { startSchedulerLoop } from './task-scheduler.js';
 import { BotRegistry, RegisteredGroup, Session } from './types.js';
 import { loadJson, saveJson } from './utils.js';
 import { logger } from './logger.js';
-import { createApiServer, stopApiServer, createApiContext } from './api/index.js';
+import { createApiServer, stopApiServer, createApiContext, initContext } from './api/index.js';
 import type http from 'http';
 
 // Multi-bot state
@@ -1055,6 +1055,17 @@ async function main(): Promise<void> {
 
   // Start API server for Hydra Console
   const apiPort = parseInt(process.env.HYDRA_API_PORT || '3340', 10);
+
+  // Initialize API context with orchestrator dependencies
+  initContext({
+    getRegisteredGroups: () => registeredGroups,
+    getSessions: () => sessions,
+    setSessions: (newSessions) => {
+      sessions = newSessions;
+      saveJson(path.join(DATA_DIR, 'sessions.json'), sessions);
+    },
+  });
+
   const apiContext = createApiContext();
   let apiServer: http.Server | null = null;
   if (process.env.HYDRA_API_ENABLED !== 'false') {
