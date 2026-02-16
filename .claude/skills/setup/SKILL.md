@@ -1,11 +1,11 @@
 ---
 name: setup
-description: Run initial NanoClaw setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanoclaw", or first-time setup requests.
+description: Run initial Hydra setup. Use when user wants to install dependencies, configure channels (Web Console, Telegram), or start the background services. Triggers on "setup", "install", "configure hydra", or first-time setup requests.
 ---
 
-# NanoClaw Setup
+# Hydra Setup
 
-Run all commands automatically. Only pause when user action is required (scanning QR codes).
+Run all commands automatically. Only pause when user action is required.
 
 **UX Note:** When asking the user questions, prefer using the `AskUserQuestion` tool instead of just outputting text. This integrates with Claude's built-in question/answer system for a better experience.
 
@@ -30,23 +30,36 @@ which docker && docker info >/dev/null 2>&1 && echo "Docker: installed and runni
 Apple Container is macOS-only. Use Docker instead.
 
 Tell the user:
-> You're on Linux, so we'll use Docker for container isolation. Let me set that up now.
-
-**Use the `/convert-to-docker` skill** to convert the codebase to Docker, then continue to Section 3.
+> You're on Linux, so we'll use Docker for container isolation. Docker should already be installed and running.
 
 ### If on macOS
 
+**If Docker is installed and running:** Continue to Section 3.
+
 **If Apple Container is already installed:** Continue to Section 3.
 
-**If Apple Container is NOT installed:** Ask the user:
-> NanoClaw needs a container runtime for isolated agent execution. You have two options:
+**If neither is available:** Ask the user:
+> Hydra needs a container runtime for isolated agent execution. You have two options:
 >
-> 1. **Apple Container** (default) - macOS-native, lightweight, designed for Apple silicon
-> 2. **Docker** - Cross-platform, widely used, works on macOS and Linux
+> 1. **Docker** (recommended) - Cross-platform, widely used, works on macOS and Linux
+> 2. **Apple Container** - macOS-native, lightweight, designed for Apple silicon
 >
 > Which would you prefer?
 
-#### Option A: Apple Container
+#### Option A: Docker (Recommended)
+
+Tell the user:
+> Please install Docker Desktop from https://docker.com/products/docker-desktop/
+>
+> Let me know when you've installed and started Docker.
+
+Wait for user confirmation, then verify:
+
+```bash
+docker info >/dev/null 2>&1 && echo "Docker is running" || echo "Docker is not running"
+```
+
+#### Option B: Apple Container
 
 Tell the user:
 > Apple Container is required for running agents in isolated environments.
@@ -63,15 +76,6 @@ Wait for user confirmation, then verify:
 container system start
 container --version
 ```
-
-**Note:** NanoClaw automatically starts the Apple Container system when it launches, so you don't need to start it manually after reboots.
-
-#### Option B: Docker
-
-Tell the user:
-> You've chosen Docker. Let me set that up now.
-
-**Use the `/convert-to-docker` skill** to convert the codebase to Docker, then continue to Section 3.
 
 ## 3. Configure Claude Authentication
 
@@ -119,152 +123,140 @@ KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
 
 ## 4. Build Container Image
 
-Build the NanoClaw agent container:
+Build the Hydra agent container:
 
 ```bash
 ./container/build.sh
 ```
 
-This creates the `nanoclaw-agent:latest` image with Node.js, Chromium, Claude Code CLI, and agent-browser.
+This creates the `hydra-agent:latest` image (or `nanoclaw-agent:latest` if using older naming) with Node.js, Chromium, Claude Code CLI, and agent-browser.
 
-Verify the build succeeded by running a simple test (this auto-detects which runtime you're using):
+Verify the build succeeded:
 
 ```bash
 if which docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  echo '{}' | docker run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
+  echo '{}' | docker run -i --rm --entrypoint /bin/echo hydra-agent:latest "Container OK" 2>/dev/null || \
+  echo '{}' | docker run -i --rm --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
 else
+  echo '{}' | container run -i --entrypoint /bin/echo hydra-agent:latest "Container OK" 2>/dev/null || \
   echo '{}' | container run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
 fi
 ```
 
-## 5. WhatsApp Authentication
-
-**USER ACTION REQUIRED**
-
-Run the authentication script:
-
-```bash
-npm run auth
-```
-
-Tell the user:
-> A QR code will appear. On your phone:
-> 1. Open WhatsApp
-> 2. Tap **Settings → Linked Devices → Link a Device**
-> 3. Scan the QR code
-
-Wait for the script to output "Successfully authenticated" then continue.
-
-If it says "Already authenticated", skip to the next step.
-
-## 6. Configure Assistant Name
-
-Ask the user:
-> What trigger word do you want to use? (default: `Andy`)
->
-> Messages starting with `@TriggerWord` will be sent to Claude.
-
-If they choose something other than `Andy`, update it in these places:
-1. `groups/CLAUDE.md` - Change "# Andy" and "You are Andy" to the new name
-2. `groups/main/CLAUDE.md` - Same changes at the top
-3. `data/registered_groups.json` - Use `@NewName` as the trigger when registering groups
-
-Store their choice - you'll use it when creating the registered_groups.json and when telling them how to test.
-
-## 7. Understand the Security Model
-
-Before registering your main channel, you need to understand an important security concept.
+## 5. Choose Communication Channels
 
 **Use the AskUserQuestion tool** to present this:
 
-> **Important: Your "main" channel is your admin control portal.**
->
-> The main channel has elevated privileges:
-> - Can see messages from ALL other registered groups
-> - Can manage and delete tasks across all groups
-> - Can write to global memory that all groups can read
-> - Has read-write access to the entire NanoClaw project
->
-> **Recommendation:** Use your personal "Message Yourself" chat or a solo WhatsApp group as your main channel. This ensures only you have admin control.
->
-> **Question:** Which setup will you use for your main channel?
+> **How do you want to communicate with Hydra?**
 >
 > Options:
-> 1. Personal chat (Message Yourself) - Recommended
-> 2. Solo WhatsApp group (just me)
-> 3. Group with other people (I understand the security implications)
+> 1. **Web Console only** (recommended for testing) - Use the built-in web UI at localhost:3000
+> 2. **Telegram only** - Use a Telegram bot
+> 3. **Both** - Web Console + Telegram
 
-If they choose option 3, ask a follow-up:
+### Option 1: Web Console Only
 
-> You've chosen a group with other people. This means everyone in that group will have admin privileges over NanoClaw.
->
-> Are you sure you want to proceed? The other members will be able to:
-> - Read messages from your other registered chats
-> - Schedule and manage tasks
-> - Access any directories you've mounted
->
-> Options:
-> 1. Yes, I understand and want to proceed
-> 2. No, let me use a personal chat or solo group instead
+This is the simplest setup. Create a minimal `hydra.yaml`:
 
-## 8. Register Main Channel
+```bash
+cat > hydra.yaml << 'EOF'
+version: "1"
+project: hydra
+
+bots: {}
+
+agents:
+  - name: Main Assistant
+    folder: main
+    trigger: "@Assistant"
+EOF
+```
+
+Skip to Section 8 (Configure Mount Allowlist).
+
+### Option 2: Telegram Only
+
+Continue to Section 6.
+
+### Option 3: Both
+
+Continue to Section 6, then the web console will also be available.
+
+## 6. Configure Telegram Bot
 
 Ask the user:
-> Do you want to use your **personal chat** (message yourself) or a **WhatsApp group** as your main control channel?
+> Do you already have a Telegram bot token, or do you need to create one?
 
-For personal chat:
-> Send any message to yourself in WhatsApp (the "Message Yourself" chat). Tell me when done.
+### Create New Bot
 
-For group:
-> Send any message in the WhatsApp group you want to use as your main channel. Tell me when done.
+Tell the user:
+> 1. Open Telegram and message @BotFather
+> 2. Send `/newbot` and follow the prompts
+> 3. Copy the bot token (looks like `123456:ABC-DEF...`)
+> 4. Paste it here
 
-After user confirms, start the app briefly to capture the message:
+### Use Existing Bot
+
+Ask them to paste the token.
+
+Once you have the token, add it to `.env`:
 
 ```bash
-timeout 10 npm run dev || true
+# Append to .env (don't overwrite existing content)
+echo "TELEGRAM_BOT_TOKEN=<token>" >> .env
 ```
 
-Then find the JID from the database:
-
-```bash
-# For personal chat (ends with @s.whatsapp.net)
-sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@s.whatsapp.net' ORDER BY timestamp DESC LIMIT 5"
-
-# For group (ends with @g.us)
-sqlite3 store/messages.db "SELECT DISTINCT chat_jid FROM messages WHERE chat_jid LIKE '%@g.us' ORDER BY timestamp DESC LIMIT 5"
-```
-
-Create/update `data/registered_groups.json` using the JID from above and the assistant name from step 5:
-```json
-{
-  "JID_HERE": {
-    "name": "main",
-    "folder": "main",
-    "trigger": "@ASSISTANT_NAME",
-    "added_at": "CURRENT_ISO_TIMESTAMP"
-  }
-}
-```
-
-Ensure the groups folder exists:
-```bash
-mkdir -p groups/main/logs
-```
-
-## 9. Configure External Directory Access (Mount Allowlist)
+## 7. Create Hydra Configuration
 
 Ask the user:
-> Do you want the agent to be able to access any directories **outside** the NanoClaw project?
+> What name should your assistant use? (This is what users will see in Telegram)
+>
+> Default: `Hydra`
+
+Create `hydra.yaml`:
+
+```bash
+cat > hydra.yaml << 'EOF'
+version: "1"
+project: hydra
+
+bots:
+  main:
+    name: <ASSISTANT_NAME>
+    token: env:TELEGRAM_BOT_TOKEN
+    platform: telegram
+
+agents:
+  - name: Main Assistant
+    folder: main
+    trigger: "@<ASSISTANT_NAME>"
+    bot: main
+    chat_id: ""  # Will be populated when you message the bot
+EOF
+```
+
+Replace `<ASSISTANT_NAME>` with their choice.
+
+Tell the user:
+> Your Telegram bot is configured. After starting the service:
+> 1. Open Telegram and message your bot
+> 2. Send any message starting with `@<ASSISTANT_NAME>`
+> 3. The chat ID will be captured and you can update hydra.yaml with it
+
+## 8. Configure Mount Allowlist (Optional)
+
+Ask the user:
+> Do you want agents to access any directories **outside** the Hydra project?
 >
 > Examples: Git repositories, project folders, documents you want Claude to work on.
 >
 > **Note:** This is optional. Without configuration, agents can only access their own group folders.
 
-If **no**, create an empty allowlist to make this explicit:
+If **no**, create an empty allowlist:
 
 ```bash
-mkdir -p ~/.config/nanoclaw
-cat > ~/.config/nanoclaw/mount-allowlist.json << 'EOF'
+mkdir -p ~/.config/hydra
+cat > ~/.config/hydra/mount-allowlist.json << 'EOF'
 {
   "allowedRoots": [],
   "blockedPatterns": [],
@@ -274,11 +266,11 @@ EOF
 echo "Mount allowlist created - no external directories allowed"
 ```
 
-Skip to the next step.
+Skip to Section 9.
 
 If **yes**, ask follow-up questions:
 
-### 9a. Collect Directory Paths
+### 8a. Collect Directory Paths
 
 Ask the user:
 > Which directories do you want to allow access to?
@@ -291,40 +283,20 @@ Ask the user:
 
 For each directory they provide, ask:
 > Should `[directory]` be **read-write** (agents can modify files) or **read-only**?
->
-> Read-write is needed for: code changes, creating files, git commits
-> Read-only is safer for: reference docs, config examples, templates
 
-### 9b. Configure Non-Main Group Access
-
-Ask the user:
-> Should **non-main groups** (other WhatsApp chats you add later) be restricted to **read-only** access even if read-write is allowed for the directory?
->
-> Recommended: **Yes** - this prevents other groups from modifying files even if you grant them access to a directory.
-
-### 9c. Create the Allowlist
+### 8b. Create the Allowlist
 
 Create the allowlist file based on their answers:
 
 ```bash
-mkdir -p ~/.config/nanoclaw
-```
-
-Then write the JSON file. Example for a user who wants `~/projects` (read-write) and `~/docs` (read-only) with non-main read-only:
-
-```bash
-cat > ~/.config/nanoclaw/mount-allowlist.json << 'EOF'
+mkdir -p ~/.config/hydra
+cat > ~/.config/hydra/mount-allowlist.json << 'EOF'
 {
   "allowedRoots": [
     {
       "path": "~/projects",
       "allowReadWrite": true,
       "description": "Development projects"
-    },
-    {
-      "path": "~/docs",
-      "allowReadWrite": false,
-      "description": "Reference documents"
     }
   ],
   "blockedPatterns": [],
@@ -333,47 +305,31 @@ cat > ~/.config/nanoclaw/mount-allowlist.json << 'EOF'
 EOF
 ```
 
-Verify the file:
+## 9. Configure System Service
+
+Detect the platform and create the appropriate service:
 
 ```bash
-cat ~/.config/nanoclaw/mount-allowlist.json
+echo "Platform: $(uname -s)"
 ```
 
-Tell the user:
-> Mount allowlist configured. The following directories are now accessible:
-> - `~/projects` (read-write)
-> - `~/docs` (read-only)
->
-> **Security notes:**
-> - Sensitive paths (`.ssh`, `.gnupg`, `.aws`, credentials) are always blocked
-> - This config file is stored outside the project, so agents cannot modify it
-> - Changes require restarting the NanoClaw service
->
-> To grant a group access to a directory, add it to their config in `data/registered_groups.json`:
-> ```json
-> "containerConfig": {
->   "additionalMounts": [
->     { "hostPath": "~/projects/my-app", "containerPath": "my-app", "readonly": false }
->   ]
-> }
-> ```
+### macOS (launchd)
 
-## 10. Configure launchd Service
-
-Generate the plist file with correct paths automatically:
+Generate the plist file:
 
 ```bash
 NODE_PATH=$(which node)
 PROJECT_PATH=$(pwd)
 HOME_PATH=$HOME
 
-cat > ~/Library/LaunchAgents/com.nanoclaw.plist << EOF
+mkdir -p ~/Library/LaunchAgents
+cat > ~/Library/LaunchAgents/com.hydra.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.nanoclaw</string>
+    <string>com.hydra</string>
     <key>ProgramArguments</key>
     <array>
         <string>${NODE_PATH}</string>
@@ -393,64 +349,142 @@ cat > ~/Library/LaunchAgents/com.nanoclaw.plist << EOF
         <string>${HOME_PATH}</string>
     </dict>
     <key>StandardOutPath</key>
-    <string>${PROJECT_PATH}/logs/nanoclaw.log</string>
+    <string>${PROJECT_PATH}/logs/hydra.log</string>
     <key>StandardErrorPath</key>
-    <string>${PROJECT_PATH}/logs/nanoclaw.error.log</string>
+    <string>${PROJECT_PATH}/logs/hydra.error.log</string>
 </dict>
 </plist>
 EOF
 
-echo "Created launchd plist with:"
-echo "  Node: ${NODE_PATH}"
-echo "  Project: ${PROJECT_PATH}"
+echo "Created launchd plist at ~/Library/LaunchAgents/com.hydra.plist"
 ```
 
-Build and start the service:
+Build and start:
 
 ```bash
 npm run build
 mkdir -p logs
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl load ~/Library/LaunchAgents/com.hydra.plist
 ```
 
-Verify it's running:
+Verify:
 ```bash
-launchctl list | grep nanoclaw
+launchctl list | grep hydra
 ```
+
+### Linux (systemd)
+
+Generate the systemd unit:
+
+```bash
+NODE_PATH=$(which node)
+PROJECT_PATH=$(pwd)
+
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/hydra.service << EOF
+[Unit]
+Description=Hydra Agent Orchestrator
+After=network.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=${PROJECT_PATH}
+ExecStart=${NODE_PATH} ${PROJECT_PATH}/dist/index.js
+Restart=always
+RestartSec=10
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
+EOF
+
+echo "Created systemd unit at ~/.config/systemd/user/hydra.service"
+```
+
+Build and start:
+
+```bash
+npm run build
+mkdir -p logs
+systemctl --user daemon-reload
+systemctl --user enable hydra
+systemctl --user start hydra
+```
+
+Verify:
+```bash
+systemctl --user status hydra
+```
+
+## 10. Start Hydra Console (Web UI)
+
+If using the web console:
+
+```bash
+cd hydra-console
+npm install
+npm run build
+npm start &
+```
+
+Or for development:
+```bash
+cd hydra-console
+npm run dev &
+```
+
+The console will be available at http://localhost:3000
 
 ## 11. Test
 
-Tell the user (using the assistant name they configured):
-> Send `@ASSISTANT_NAME hello` in your registered chat.
+**For Web Console:**
+> Open http://localhost:3000 in your browser. You should see the Hydra Console.
+> Click on the "main" agent and send a test message.
+
+**For Telegram:**
+> Send a message to your bot starting with `@<ASSISTANT_NAME> hello`
 
 Check the logs:
 ```bash
-tail -f logs/nanoclaw.log
+tail -f logs/hydra.log
 ```
 
-The user should receive a response in WhatsApp.
+## Remote Access (SSH Port Forwarding)
+
+If you want to access Hydra from a remote machine:
+
+```bash
+# Forward both the API and Console ports
+ssh -L 3000:localhost:3000 -L 3340:localhost:3340 user@server
+```
+
+Then open http://localhost:3000 on your local machine.
 
 ## Troubleshooting
 
-**Service not starting**: Check `logs/nanoclaw.error.log`
+**Service not starting**:
+- macOS: Check `logs/hydra.error.log`
+- Linux: `journalctl --user -u hydra -f`
 
 **Container agent fails with "Claude Code process exited with code 1"**:
-- Ensure the container runtime is running:
-  - Apple Container: `container system start`
-  - Docker: `docker info` (start Docker Desktop on macOS, or `sudo systemctl start docker` on Linux)
+- Ensure Docker is running: `docker info`
+- Or Apple Container: `container system start`
 - Check container logs: `cat groups/main/logs/container-*.log | tail -50`
 
+**Web Console can't connect to API**:
+- Verify the orchestrator is running on port 3340
+- Check `NEXT_PUBLIC_ORCHESTRATOR_URL` if using non-default ports
+
 **No response to messages**:
-- Verify the trigger pattern matches (e.g., `@AssistantName` at start of message)
-- Check that the chat JID is in `data/registered_groups.json`
-- Check `logs/nanoclaw.log` for errors
+- Verify the trigger pattern matches (e.g., `@AssistantName` at start)
+- Check `logs/hydra.log` for errors
 
-**WhatsApp disconnected**:
-- The service will show a macOS notification
-- Run `npm run auth` to re-authenticate
-- Restart the service: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
-
-**Unload service**:
+**Unload service (macOS)**:
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
+launchctl unload ~/Library/LaunchAgents/com.hydra.plist
+```
+
+**Stop service (Linux)**:
+```bash
+systemctl --user stop hydra
 ```
