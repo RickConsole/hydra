@@ -40,6 +40,8 @@ import { startSchedulerLoop } from './task-scheduler.js';
 import { BotRegistry, RegisteredGroup, Session } from './types.js';
 import { loadJson, saveJson } from './utils.js';
 import { logger } from './logger.js';
+import { createApiServer, stopApiServer, createApiContext } from './api/index.js';
+import type http from 'http';
 
 // Multi-bot state
 let botRegistry: BotRegistry = {};
@@ -1051,6 +1053,14 @@ async function main(): Promise<void> {
     getSessions: () => sessions,
   });
 
+  // Start API server for Hydra Console
+  const apiPort = parseInt(process.env.HYDRA_API_PORT || '3340', 10);
+  const apiContext = createApiContext();
+  let apiServer: http.Server | null = null;
+  if (process.env.HYDRA_API_ENABLED !== 'false') {
+    apiServer = createApiServer(apiContext, apiPort);
+  }
+
   // Graceful shutdown
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Shutting down');
@@ -1058,6 +1068,9 @@ async function main(): Promise<void> {
       import('./voice.js').then(({ stopVoiceServer }) => stopVoiceServer()).catch(() => {});
     }
     // SMS is handled by voice server, no separate shutdown needed
+    if (apiServer) {
+      stopApiServer(apiServer).catch(() => {});
+    }
     stopIpcWatcher();
     stopScheduler();
     for (const [botKey, bot] of bots) {

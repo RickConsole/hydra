@@ -45,7 +45,8 @@ try {
   // Show summary
   console.log('Summary:');
   console.log(`  Bots:`);
-  for (const [key, bot] of Object.entries(config.bots)) {
+  for (const [key, botEntry] of Object.entries(config.bots)) {
+    const bot = botEntry as { name: string; platform: string };
     console.log(`    - ${key}: ${bot.name} (${bot.platform})`);
   }
 

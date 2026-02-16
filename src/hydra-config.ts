@@ -45,8 +45,8 @@ const ContainerConfigSchema = z.object({
   timeout: z.number().default(300000).describe('Timeout in ms'),
   memory_limit: z.string().optional().describe('e.g., "2Gi"'),
   cpu_limit: z.string().optional().describe('e.g., "1"'),
-  mounts: z.array(MountSchema).default([]),
-  env: z.record(z.string()).default({}),
+  mounts: z.array(MountSchema).default(() => []),
+  env: z.record(z.string(), z.string()).default(() => ({})),
 });
 
 /**
@@ -70,8 +70,8 @@ const MountSecuritySchema = z.object({
     path: z.string(),
     allow_read_write: z.boolean().default(false),
     description: z.string().optional(),
-  })).default([]),
-  blocked_patterns: z.array(z.string()).default(['password', 'secret', 'token', '.ssh', '.gnupg']),
+  })).default(() => []),
+  blocked_patterns: z.array(z.string()).default(() => ['password', 'secret', 'token', '.ssh', '.gnupg']),
   non_main_readonly: z.boolean().default(true),
 });
 
@@ -82,7 +82,7 @@ const VoiceConfigSchema = z.object({
   enabled: z.boolean().default(false),
   port: z.number().default(3340),
   group: z.string().default('main'),
-  allowed_callers: z.array(z.string()).default([]),
+  allowed_callers: z.array(z.string()).default(() => []),
   greeting: z.string().default("Hey, what's up?"),
   max_duration: z.number().default(600000),
   twilio: z.object({
@@ -139,15 +139,15 @@ export const HydraConfigSchema = z.object({
   project: z.string().optional().describe('Project/org name'),
 
   // Bots (communication channels)
-  bots: z.record(BotSchema).default({}),
+  bots: z.record(z.string(), BotSchema).default(() => ({})),
 
   // Agents (groups)
-  agents: z.array(AgentSchema).default([]),
+  agents: z.array(AgentSchema).default(() => []),
 
   // Security
   security: z.object({
     mounts: MountSecuritySchema.optional(),
-  }).default({}),
+  }).default(() => ({})),
 
   // Integrations
   voice: VoiceConfigSchema.optional(),
@@ -430,7 +430,7 @@ export function getAgentByFolder(config: HydraConfig, folder: string): AgentConf
  * Get bot config by key
  */
 export function getBotByKey(config: HydraConfig, key: string): BotConfig | undefined {
-  return config.bots[key];
+  return config.bots[key] as BotConfig | undefined;
 }
 
 /**
@@ -498,7 +498,8 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
 export function toLegacyBotRegistry(config: HydraConfig): Record<string, { token: string; name: string }> {
   const result: Record<string, { token: string; name: string }> = {};
 
-  for (const [key, bot] of Object.entries(config.bots)) {
+  for (const [key, botEntry] of Object.entries(config.bots)) {
+    const bot = botEntry as BotConfig;
     result[key] = {
       token: bot.token,
       name: bot.name,
