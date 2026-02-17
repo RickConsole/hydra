@@ -54,12 +54,11 @@ async function createMem0Client(ctx: Mem0McpContext): Promise<Mem0Client> {
       let embedderConfig;
       if (ollamaUrl) {
         // Use Ollama for local embeddings (no external API key needed)
-        const ollamaParsed = new URL(ollamaUrl);
         embedderConfig = {
           provider: 'ollama',
           config: {
             model: 'nomic-embed-text',
-            host: `${ollamaParsed.protocol}//${ollamaParsed.host}`,
+            url: ollamaUrl,
           },
         };
         console.error(`[agent-runner] Mem0 self-hosted mode (Qdrant: ${qdrantHost}:${qdrantPort}, Ollama: ${ollamaUrl})`);
