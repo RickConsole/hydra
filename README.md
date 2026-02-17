@@ -38,14 +38,14 @@ Most AI agent frameworks run everything in a single process with application-lev
 
 ```
                     ┌──────────────┐
-                    │   hydra exec │  ← You are here (interactive CLI)
+                    │  hydra exec  │  ← You are here (interactive CLI)
                     └──────┬───────┘
                            │
           ┌────────────────┼─────────────────┐
           │                │                 │
           ▼                ▼                 ▼
    ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-   │  Container  │  │  Container  │  │  Container  │  ...
+   │  Container  │  │  Container  │  │  Container  │ 
    │             │  │             │  │             │
    │ Claude Code │  │ Claude Code │  │ Claude Code │
    │  (Agent SDK)│  │  (Agent SDK)│  │  (Agent SDK)│
@@ -55,7 +55,7 @@ Most AI agent frameworks run everything in a single process with application-lev
    │  └ extra/*  │  │  └ extra/*  │  │  └ extra/*  │
    │  └ ipc/     │  │  └ ipc/     │  │  └ ipc/     │
    └─────────────┘  └─────────────┘  └─────────────┘
-        main             dev            warmaster
+        main             dev              other
 
    Each container: isolated filesystem, own CLAUDE.md,
    own session state, own mem0 memory, own IPC namespace.
