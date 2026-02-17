@@ -95,6 +95,7 @@ services:
     restart: unless-stopped
     volumes:
       - qdrant_data:/qdrant/storage
+      - qdrant_snapshots:/qdrant/snapshots
     networks:
       - hydra-internal
     # No external port exposure - only orchestrator can access
@@ -110,9 +111,7 @@ services:
       timeout: 10s
       retries: 3
     # Security hardening
-    read_only: true
-    tmpfs:
-      - /tmp
+    # Note: Qdrant needs write access for storage, snapshots, and init files
     security_opt:
       - no-new-privileges:true
 
@@ -209,6 +208,8 @@ networks:
 
 volumes:
   qdrant_data:
+    driver: local
+  qdrant_snapshots:
     driver: local
   ollama_data:
     driver: local
