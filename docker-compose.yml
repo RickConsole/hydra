@@ -4,7 +4,9 @@
 # - Docker socket access is proxied with limited permissions
 # - Agent containers run with dropped capabilities and resource limits
 # - Internal network isolates services from agents
-# - Qdrant only accessible from orchestrator, not agents
+# - Qdrant and Ollama only accessible from orchestrator, not agents
+#
+# Zero external API keys required for memory - uses local Ollama embeddings
 
 services:
   # Docker Socket Proxy - limits what orchestrator can do with Docker
@@ -43,6 +45,48 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+
+  # Ollama - Local LLM and embeddings
+  # Runs embedding model for mem0 (no external API keys needed)
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - hydra-internal
+    # No external port exposure - only orchestrator can access
+    # Uncomment below for debugging or direct ollama usage:
+    # ports:
+    #   - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Note: Ollama needs write access for model storage
+    security_opt:
+      - no-new-privileges:true
+
+  # Ollama model puller - ensures embedding model is available
+  # Runs once on startup, then exits
+  ollama-setup:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - hydra-internal
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "Pulling embedding model..."
+        ollama pull nomic-embed-text
+        echo "Embedding model ready!"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    restart: "no"
 
   # Qdrant - Vector database for mem0
   # Only accessible from internal network (orchestrator), not from agents
@@ -93,9 +137,11 @@ services:
     environment:
       # Use Docker socket proxy instead of direct socket
       - DOCKER_HOST=tcp://docker-proxy:2375
-      # Qdrant connection
+      # Memory backend - self-hosted with Qdrant + Ollama
       - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://ollama:11434
       - MEM0_STORAGE=qdrant
+      - MEM0_EMBEDDER=ollama
       # API configuration
       - HYDRA_API_PORT=3340
       - NODE_ENV=production
@@ -104,6 +150,10 @@ services:
         condition: service_started
       qdrant:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-setup:
+        condition: service_completed_successfully
     networks:
       - hydra-internal
       - hydra-agents  # Can communicate with agent containers
@@ -146,7 +196,7 @@ services:
 
 networks:
   # Internal network for Hydra services
-  # Qdrant, orchestrator, console communicate here
+  # Qdrant, Ollama, orchestrator, console communicate here
   hydra-internal:
     driver: bridge
     internal: false  # Needs external for console to be accessible
@@ -159,4 +209,6 @@ networks:
 
 volumes:
   qdrant_data:
+    driver: local
+  ollama_data:
     driver: local

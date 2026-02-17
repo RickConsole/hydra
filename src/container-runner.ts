@@ -219,8 +219,9 @@ function buildVolumeMounts(
     'CLAUDE_CODE_OAUTH_TOKEN',
     'ANTHROPIC_API_KEY',
     'MEM0_API_KEY',      // Cloud mem0
-    'QDRANT_URL',        // Self-hosted mem0
-    'OPENAI_API_KEY',    // For embeddings in self-hosted mode
+    'QDRANT_URL',        // Self-hosted mem0 vector store
+    'OLLAMA_URL',        // Self-hosted mem0 embeddings (local, no API key needed)
+    'OPENAI_API_KEY',    // For embeddings in self-hosted mode (optional)
   ];
   const groupEnvVars = group.containerConfig?.allowedEnvVars ?? [];
   const allowedVars = [...baseVars, ...groupEnvVars];

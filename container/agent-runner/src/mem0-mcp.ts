@@ -15,7 +15,8 @@ import { z } from 'zod';
 export interface Mem0McpContext {
   apiKey?: string;         // For cloud mode
   qdrantUrl?: string;      // For self-hosted mode
-  embeddingApiKey?: string; // OpenAI/Anthropic key for embeddings (self-hosted)
+  ollamaUrl?: string;      // Ollama URL for local embeddings (self-hosted)
+  embeddingApiKey?: string; // OpenAI key for embeddings (optional, self-hosted)
   groupFolder: string;
 }
 
@@ -29,7 +30,7 @@ interface Mem0Client {
 }
 
 async function createMem0Client(ctx: Mem0McpContext): Promise<Mem0Client> {
-  const { apiKey, qdrantUrl, embeddingApiKey, groupFolder } = ctx;
+  const { apiKey, qdrantUrl, ollamaUrl, embeddingApiKey } = ctx;
 
   // Cloud mode - use MemoryClient
   if (apiKey && !qdrantUrl) {
@@ -45,26 +46,44 @@ async function createMem0Client(ctx: Mem0McpContext): Promise<Mem0Client> {
       const { Memory } = await import('mem0ai/oss');
 
       // Parse Qdrant URL
-      const url = new URL(qdrantUrl);
-      const host = url.hostname;
-      const port = parseInt(url.port || '6333', 10);
+      const qdrantParsed = new URL(qdrantUrl);
+      const qdrantHost = qdrantParsed.hostname;
+      const qdrantPort = parseInt(qdrantParsed.port || '6333', 10);
 
-      console.error(`[agent-runner] Mem0 self-hosted mode enabled (Qdrant: ${host}:${port})`);
+      // Determine embedder configuration
+      let embedderConfig;
+      if (ollamaUrl) {
+        // Use Ollama for local embeddings (no external API key needed)
+        const ollamaParsed = new URL(ollamaUrl);
+        embedderConfig = {
+          provider: 'ollama',
+          config: {
+            model: 'nomic-embed-text',
+            host: `${ollamaParsed.protocol}//${ollamaParsed.host}`,
+          },
+        };
+        console.error(`[agent-runner] Mem0 self-hosted mode (Qdrant: ${qdrantHost}:${qdrantPort}, Ollama: ${ollamaUrl})`);
+      } else if (embeddingApiKey) {
+        // Use OpenAI for embeddings
+        embedderConfig = {
+          provider: 'openai',
+          config: { apiKey: embeddingApiKey },
+        };
+        console.error(`[agent-runner] Mem0 self-hosted mode (Qdrant: ${qdrantHost}:${qdrantPort}, OpenAI embeddings)`);
+      } else {
+        console.error(`[agent-runner] Mem0 self-hosted mode (Qdrant: ${qdrantHost}:${qdrantPort}, default embedder)`);
+      }
 
       const memory = new Memory({
         vectorStore: {
           provider: 'qdrant',
           config: {
-            host,
-            port,
+            host: qdrantHost,
+            port: qdrantPort,
             collectionName: 'hydra_memories',
           },
         },
-        // Use OpenAI for embeddings if key provided, otherwise use Anthropic
-        embedder: embeddingApiKey ? {
-          provider: 'openai',
-          config: { apiKey: embeddingApiKey },
-        } : undefined,
+        embedder: embedderConfig,
       });
 
       // Wrap Memory class to match MemoryClient interface
@@ -76,8 +95,8 @@ async function createMem0Client(ctx: Mem0McpContext): Promise<Mem0Client> {
         delete: (memoryId) => memory.delete(memoryId),
       };
     } catch (err) {
-      console.error('[agent-runner] Failed to initialize mem0 OSS, falling back to disabled:', err);
-      throw new Error('Mem0 self-hosted initialization failed. Check Qdrant connection.');
+      console.error('[agent-runner] Failed to initialize mem0 OSS:', err);
+      throw new Error('Mem0 self-hosted initialization failed. Check Qdrant/Ollama connection.');
     }
   }
 
