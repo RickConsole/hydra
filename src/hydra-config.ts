@@ -5,7 +5,6 @@
  * - Bots/channels
  * - Agents (groups)
  * - Security policies
- * - Integrations (voice, SMS)
  * - Memory settings
  */
 
@@ -55,9 +54,10 @@ const ContainerConfigSchema = z.object({
 const AgentSchema = z.object({
   name: z.string().describe('Display name for the agent'),
   folder: z.string().describe('Folder name under groups/'),
-  trigger: z.string().describe('Trigger word (e.g., "@Merlin")'),
-  bot: z.string().describe('Which bot this agent uses (key from bots section)'),
-  chat_id: z.string().describe('Chat/group ID for this agent'),
+  trigger: z.string().optional().describe('Trigger word (e.g., "@Merlin")'),
+  bot: z.string().optional().describe('Which bot this agent uses (key from bots section)'),
+  chat_id: z.string().optional().describe('Chat/group ID for this agent'),
+  model: z.string().optional().describe('Model to use (e.g., "opus", "sonnet")'),
   persona: z.string().optional().describe('Inline persona (alternative to CLAUDE.md file)'),
   container: ContainerConfigSchema.optional(),
 });
@@ -76,48 +76,15 @@ const MountSecuritySchema = z.object({
 });
 
 /**
- * Voice calling configuration
- */
-const VoiceConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  port: z.number().default(3340),
-  group: z.string().default('main'),
-  allowed_callers: z.array(z.string()).default(() => []),
-  greeting: z.string().default("Hey, what's up?"),
-  max_duration: z.number().default(600000),
-  twilio: z.object({
-    account_sid: z.string(),
-    auth_token: z.string(),
-    phone_number: z.string(),
-  }).optional(),
-  elevenlabs: z.object({
-    api_key: z.string(),
-    voice_id: z.string().default('JBFqnCBsd6RMkjVDRZzb'),
-    model_id: z.string().default('eleven_turbo_v2_5'),
-  }).optional(),
-  ngrok: z.object({
-    authtoken: z.string(),
-    domain: z.string(),
-  }).optional(),
-});
-
-/**
- * SMS configuration
- */
-const SmsConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  group: z.string().default('main'),
-  allowed_senders: z.array(z.string()).default([]),
-});
-
-/**
  * Memory configuration
  */
 const MemoryConfigSchema = z.object({
-  provider: z.enum(['mem0', 'postgres', 'none']).default('mem0'),
+  provider: z.enum(['mem0', 'qdrant', 'postgres', 'none']).default('mem0'),
   self_hosted: z.boolean().default(false),
   endpoint: z.string().optional(),
   api_key: z.string().optional().describe('Can be env:VAR_NAME reference'),
+  qdrant_url: z.string().optional().describe('Qdrant URL for self-hosted vector storage'),
+  ollama_url: z.string().optional().describe('Ollama URL for local embeddings'),
 });
 
 /**
@@ -148,10 +115,6 @@ export const HydraConfigSchema = z.object({
   security: z.object({
     mounts: MountSecuritySchema.optional(),
   }).default(() => ({})),
-
-  // Integrations
-  voice: VoiceConfigSchema.optional(),
-  sms: SmsConfigSchema.optional(),
 
   // Memory
   memory: MemoryConfigSchema.optional(),
@@ -357,49 +320,6 @@ export function generateConfigFromExisting(projectRoot: string): HydraConfig {
     };
   }
 
-  // Check for voice/SMS from .env
-  if (process.env.VOICE_ENABLED === 'true') {
-    config.voice = {
-      enabled: true,
-      port: parseInt(process.env.VOICE_PORT || '3340', 10),
-      group: process.env.VOICE_GROUP || 'main',
-      allowed_callers: (process.env.VOICE_ALLOWED_CALLERS || '').split(',').filter(Boolean),
-      greeting: process.env.VOICE_GREETING || "Hey, what's up?",
-      max_duration: parseInt(process.env.VOICE_MAX_DURATION || '600000', 10),
-    };
-
-    if (process.env.TWILIO_ACCOUNT_SID) {
-      config.voice.twilio = {
-        account_sid: 'env:TWILIO_ACCOUNT_SID',
-        auth_token: 'env:TWILIO_AUTH_TOKEN',
-        phone_number: 'env:TWILIO_PHONE_NUMBER',
-      };
-    }
-
-    if (process.env.ELEVENLABS_API_KEY) {
-      config.voice.elevenlabs = {
-        api_key: 'env:ELEVENLABS_API_KEY',
-        voice_id: process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb',
-        model_id: process.env.ELEVENLABS_MODEL_ID || 'eleven_turbo_v2_5',
-      };
-    }
-
-    if (process.env.NGROK_AUTHTOKEN) {
-      config.voice.ngrok = {
-        authtoken: 'env:NGROK_AUTHTOKEN',
-        domain: 'env:NGROK_DOMAIN',
-      };
-    }
-  }
-
-  if (process.env.SMS_ENABLED === 'true') {
-    config.sms = {
-      enabled: true,
-      group: process.env.SMS_GROUP || 'main',
-      allowed_senders: (process.env.SMS_ALLOWED_SENDERS || '').split(',').filter(Boolean),
-    };
-  }
-
   return HydraConfigSchema.parse(config);
 }
 
@@ -477,7 +397,7 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
     result[jid] = {
       name: agent.name,
       folder: agent.folder,
-      trigger: agent.trigger,
+      trigger: agent.trigger || agent.name,
       added_at: new Date().toISOString(),
     };
 
@@ -496,6 +416,9 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
 
   return result;
 }
+
+/** Alias for toLegacyRegisteredGroups — agents and groups are the same concept */
+export const toLegacyRegisteredAgents = toLegacyRegisteredGroups;
 
 /**
  * Convert HydraConfig to legacy BotRegistry format

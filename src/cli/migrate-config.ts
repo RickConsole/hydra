@@ -21,9 +21,6 @@ try {
   console.log('\nGenerated configuration:');
   console.log(`  - Bots: ${Object.keys(config.bots).length}`);
   console.log(`  - Agents: ${config.agents.length}`);
-  console.log(`  - Voice: ${config.voice?.enabled ? 'enabled' : 'disabled'}`);
-  console.log(`  - SMS: ${config.sms?.enabled ? 'enabled' : 'disabled'}`);
-
   if (config.security?.mounts) {
     console.log(`  - Mount roots: ${config.security.mounts.allowed_roots?.length || 0}`);
   }

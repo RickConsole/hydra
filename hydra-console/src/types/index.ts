@@ -43,8 +43,6 @@ export interface HydraConfig {
   bots: Record<string, BotConfig>;
   agents: AgentConfig[];
   security?: SecurityConfig;
-  voice?: VoiceConfig;
-  sms?: SmsConfig;
   memory?: MemoryConfig;
   runtime?: RuntimeConfig;
 }
@@ -82,16 +80,6 @@ export interface MountSecurityConfig {
   allowlist?: string[];
   denylist?: string[];
   readOnlyPaths?: string[];
-}
-
-export interface VoiceConfig {
-  enabled?: boolean;
-  provider?: string;
-}
-
-export interface SmsConfig {
-  enabled?: boolean;
-  provider?: string;
 }
 
 export interface MemoryConfig {

@@ -99,35 +99,6 @@
     }
   },
 
-  "voice": {
-    "enabled": false,
-    "port": 3340,
-    "group": "main",
-    "allowed_callers": [],
-    "greeting": "Hey, what's up?",
-    "max_duration": 600000,
-    "twilio": {
-      "account_sid": "env:TWILIO_ACCOUNT_SID",
-      "auth_token": "env:TWILIO_AUTH_TOKEN",
-      "phone_number": "env:TWILIO_PHONE_NUMBER"
-    },
-    "elevenlabs": {
-      "api_key": "env:ELEVENLABS_API_KEY",
-      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
-      "model_id": "eleven_turbo_v2_5"
-    },
-    "ngrok": {
-      "authtoken": "env:NGROK_AUTHTOKEN",
-      "domain": "env:NGROK_DOMAIN"
-    }
-  },
-
-  "sms": {
-    "enabled": false,
-    "group": "main",
-    "allowed_senders": []
-  },
-
   "memory": {
     "provider": "mem0",
     "self_hosted": false,

@@ -69,6 +69,7 @@ export const MOUNT_ALLOWLIST_PATH = path.join(
 );
 export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
 export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
+export const AGENTS_DIR = path.resolve(PROJECT_ROOT, 'agents');
 export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 export const MAIN_GROUP_FOLDER = 'main';
 
@@ -197,68 +198,6 @@ export function parseTelegramJid(jid: string): { botKey: string; chatId: string 
 export function buildTelegramJid(botKey: string, chatId: string): string {
   return `telegram:${botKey}:${chatId}`;
 }
-
-export function parseSmsJid(jid: string): { phoneNumber: string } | null {
-  if (!jid.startsWith('sms:twilio:')) return null;
-  const parts = jid.split(':');
-  if (parts.length === 3) {
-    return { phoneNumber: parts[2] };
-  }
-  return null;
-}
-
-export function buildSmsJid(phoneNumber: string): string {
-  return `sms:twilio:${phoneNumber}`;
-}
-
-export function parseVoiceJid(jid: string): { callSid: string } | null {
-  if (!jid.startsWith('voice:twilio:')) return null;
-  const parts = jid.split(':');
-  if (parts.length === 3) {
-    return { callSid: parts[2] };
-  }
-  return null;
-}
-
-export function buildVoiceJid(callSid: string): string {
-  return `voice:twilio:${callSid}`;
-}
-
-// ============================================================================
-// Voice Configuration
-// ============================================================================
-
-export const VOICE_ENABLED = hydraConfig?.voice?.enabled ?? process.env.VOICE_ENABLED === 'true';
-export const VOICE_PORT = hydraConfig?.voice?.port ?? parseInt(process.env.VOICE_PORT || '3340', 10);
-export const VOICE_GROUP = hydraConfig?.voice?.group ?? process.env.VOICE_GROUP ?? 'main';
-export const VOICE_ALLOWED_CALLERS = hydraConfig?.voice?.allowed_callers ??
-  (process.env.VOICE_ALLOWED_CALLERS || '').split(',').map((s) => s.trim()).filter(Boolean);
-export const VOICE_GREETING = hydraConfig?.voice?.greeting ?? process.env.VOICE_GREETING ?? "Hey Rick, what's up?";
-export const VOICE_MAX_DURATION = hydraConfig?.voice?.max_duration ?? parseInt(process.env.VOICE_MAX_DURATION || '600000', 10);
-export const VOICE_AUDIO_DIR = path.resolve(DATA_DIR, 'voice-audio');
-
-// Twilio credentials (from hydra.yaml or env vars)
-export const TWILIO_ACCOUNT_SID = hydraConfig?.voice?.twilio?.account_sid ?? process.env.TWILIO_ACCOUNT_SID ?? '';
-export const TWILIO_AUTH_TOKEN = hydraConfig?.voice?.twilio?.auth_token ?? process.env.TWILIO_AUTH_TOKEN ?? '';
-export const TWILIO_PHONE_NUMBER = hydraConfig?.voice?.twilio?.phone_number ?? process.env.TWILIO_PHONE_NUMBER ?? '';
-
-// ElevenLabs credentials (from hydra.yaml or env vars)
-export const ELEVENLABS_API_KEY = hydraConfig?.voice?.elevenlabs?.api_key ?? process.env.ELEVENLABS_API_KEY ?? '';
-export const ELEVENLABS_VOICE_ID = hydraConfig?.voice?.elevenlabs?.voice_id ?? process.env.ELEVENLABS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb';
-export const ELEVENLABS_MODEL_ID = hydraConfig?.voice?.elevenlabs?.model_id ?? process.env.ELEVENLABS_MODEL_ID ?? 'eleven_turbo_v2_5';
-
-// ngrok credentials (from hydra.yaml or env vars)
-export const NGROK_AUTHTOKEN = hydraConfig?.voice?.ngrok?.authtoken ?? process.env.NGROK_AUTHTOKEN ?? '';
-export const NGROK_DOMAIN = hydraConfig?.voice?.ngrok?.domain ?? process.env.NGROK_DOMAIN ?? '';
-
-// ============================================================================
-// SMS Configuration
-// ============================================================================
-
-export const SMS_ENABLED = hydraConfig?.sms?.enabled ?? process.env.SMS_ENABLED === 'true';
-export const SMS_GROUP = hydraConfig?.sms?.group ?? process.env.SMS_GROUP ?? 'main';
-export const SMS_ALLOWED_SENDERS = hydraConfig?.sms?.allowed_senders ??
-  (process.env.SMS_ALLOWED_SENDERS || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 // ============================================================================
 // Exported Config State

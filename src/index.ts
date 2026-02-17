@@ -7,7 +7,6 @@ import { Telegraf } from 'telegraf';
 
 import {
   buildTelegramJid,
-  buildVoiceJid,
   DATA_DIR,
   getTriggerPattern,
   IPC_POLL_INTERVAL,
@@ -15,14 +14,8 @@ import {
   loadBotRegistry,
   loadRegisteredGroups,
   MAIN_GROUP_FOLDER,
-  parseSmsJid,
   parseTelegramJid,
-  parseVoiceJid,
-  SMS_ENABLED,
-  SMS_GROUP,
   TIMEZONE,
-  VOICE_ENABLED,
-  VOICE_GROUP,
 } from './config.js';
 import {
   ContentBlock,
@@ -385,22 +378,6 @@ async function sendMessage(jid: string, text: string): Promise<void> {
   const parsed = parseTelegramJid(jid);
   if (parsed) {
     await sendTelegramMessage(parsed.botKey, parsed.chatId, text);
-    return;
-  }
-
-  const voiceParsed = parseVoiceJid(jid);
-  if (voiceParsed) {
-    // Voice responses are handled via TTS in the voice server poll loop;
-    // IPC messages to voice JIDs get queued as TTS responses
-    const { queueVoiceResponse } = await import('./voice.js');
-    await queueVoiceResponse(voiceParsed.callSid, text);
-    return;
-  }
-
-  const smsParsed = parseSmsJid(jid);
-  if (smsParsed) {
-    const { sendSms } = await import('./sms.js');
-    await sendSms(smsParsed.phoneNumber, text);
     return;
   }
 
@@ -1014,41 +991,6 @@ async function main(): Promise<void> {
     ]).catch((err) => logger.warn({ botKey, err }, 'Failed to register bot commands'));
   }
 
-  // Start voice server if enabled
-  if (VOICE_ENABLED) {
-    const { startVoiceServer } = await import('./voice.js');
-    const voiceGroup = Object.values(registeredGroups).find((g) => g.folder === VOICE_GROUP);
-    if (voiceGroup) {
-      const voiceRunAgent = async (prompt: string, chatJid: string) => {
-        return runAgent(voiceGroup, prompt, chatJid);
-      };
-      await startVoiceServer(voiceRunAgent, sendMessage);
-      logger.info({ group: VOICE_GROUP }, 'Voice calling enabled');
-    } else {
-      logger.warn({ group: VOICE_GROUP }, 'Voice group not found in registered groups, voice disabled');
-    }
-  }
-
-  // Enable SMS handling if configured (uses same server as voice)
-  if (SMS_ENABLED) {
-    const smsGroup = Object.values(registeredGroups).find((g) => g.folder === SMS_GROUP);
-    if (smsGroup) {
-      const smsRunAgent = async (prompt: string, chatJid: string) => {
-        return runAgent(smsGroup, prompt, chatJid);
-      };
-      // SMS shares the voice server - just set the callback
-      if (VOICE_ENABLED) {
-        const { setSmsAgentCallback } = await import('./voice.js');
-        setSmsAgentCallback(smsRunAgent);
-        logger.info({ group: SMS_GROUP, webhookUrl: 'https://' + process.env.NGROK_DOMAIN + '/sms/incoming' }, 'SMS enabled (via voice server)');
-      } else {
-        logger.warn('SMS requires VOICE_ENABLED=true (shares the same webhook server)');
-      }
-    } else {
-      logger.warn({ group: SMS_GROUP }, 'SMS group not found in registered groups, SMS disabled');
-    }
-  }
-
   // Start background services
   const stopIpcWatcher = startIpcWatcher();
   const stopScheduler = startSchedulerLoop({
@@ -1079,10 +1021,6 @@ async function main(): Promise<void> {
   // Graceful shutdown
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Shutting down');
-    if (VOICE_ENABLED) {
-      import('./voice.js').then(({ stopVoiceServer }) => stopVoiceServer()).catch(() => {});
-    }
-    // SMS is handled by voice server, no separate shutdown needed
     if (apiServer) {
       stopApiServer(apiServer).catch(() => {});
     }

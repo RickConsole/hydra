@@ -33,7 +33,7 @@ const SOURCE_CREDENTIALS = path.join(
  * Copy credentials from ~/.claude/ to the group's session dir before spawning.
  * Ensures every container starts with the freshest available token.
  */
-function copyCredentialsToGroup(groupSessionsDir: string): void {
+export function copyCredentialsToGroup(groupSessionsDir: string): void {
   try {
     if (!fs.existsSync(SOURCE_CREDENTIALS)) return;
     const dest = path.join(groupSessionsDir, '.credentials.json');
@@ -48,7 +48,7 @@ function copyCredentialsToGroup(groupSessionsDir: string): void {
  * After container exits, write back credentials to ~/.claude/ if the group's
  * copy has a newer expiresAt. This ensures token refreshes propagate back.
  */
-function writeBackCredentialsIfNewer(groupSessionsDir: string): void {
+export function writeBackCredentialsIfNewer(groupSessionsDir: string): void {
   try {
     const groupCreds = path.join(groupSessionsDir, '.credentials.json');
     if (!fs.existsSync(groupCreds)) return;
@@ -77,7 +77,7 @@ function writeBackCredentialsIfNewer(groupSessionsDir: string): void {
 }
 
 // Detect container runtime (Docker or Apple Container)
-function detectContainerRuntime(): 'docker' | 'container' {
+export function detectContainerRuntime(): 'docker' | 'container' {
   // Check for Docker first (prefer Docker on Linux)
   try {
     // Check if docker command exists and daemon is accessible
@@ -149,7 +149,7 @@ interface VolumeMount {
   readonly?: boolean;
 }
 
-function buildVolumeMounts(
+export function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
 ): VolumeMount[] {
@@ -276,11 +276,38 @@ function buildVolumeMounts(
   return mounts;
 }
 
-function buildContainerArgs(
+export interface ContainerRunOptions {
+  interactive?: boolean;
+  entrypoint?: string;
+  containerName?: string;
+  envVars?: Record<string, string>;
+  extraArgs?: string[];
+}
+
+export function buildContainerArgs(
   mounts: VolumeMount[],
   containerConfig?: RegisteredGroup['containerConfig'],
+  options?: ContainerRunOptions,
 ): string[] {
   const args: string[] = ['run', '-i', '--rm'];
+
+  if (options?.interactive) {
+    args.push('-t');
+  }
+
+  if (options?.containerName) {
+    args.push('--name', options.containerName);
+  }
+
+  if (options?.entrypoint) {
+    args.push('--entrypoint', options.entrypoint);
+  }
+
+  if (options?.envVars) {
+    for (const [key, value] of Object.entries(options.envVars)) {
+      args.push('-e', `${key}=${value}`);
+    }
+  }
 
   // Network mode (Docker only - Apple Container doesn't support this)
   if (CONTAINER_RUNTIME === 'docker' && containerConfig?.networkMode) {
@@ -308,6 +335,11 @@ function buildContainerArgs(
   // Use per-group image if specified, otherwise default
   const image = containerConfig?.image || CONTAINER_IMAGE;
   args.push(image);
+
+  // Extra args go after the image name
+  if (options?.extraArgs) {
+    args.push(...options.extraArgs);
+  }
 
   return args;
 }
@@ -630,3 +662,7 @@ export function writeGroupsSnapshot(
     ),
   );
 }
+
+// Aliases for exec.ts which uses agent-centric naming
+export const copyCredentialsToAgent = copyCredentialsToGroup;
+export const getContainerRuntime = detectContainerRuntime;

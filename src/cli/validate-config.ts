@@ -58,14 +58,6 @@ try {
     console.log(`    - ${agent.folder}: ${agent.name} (${agent.trigger})${containerInfo}`);
   }
 
-  if (config.voice?.enabled) {
-    console.log(`  Voice: enabled on port ${config.voice.port}`);
-  }
-
-  if (config.sms?.enabled) {
-    console.log(`  SMS: enabled for group ${config.sms.group}`);
-  }
-
   if (config.memory) {
     console.log(`  Memory: ${config.memory.provider}${config.memory.self_hosted ? ' (self-hosted)' : ''}`);
   }
@@ -77,7 +69,7 @@ try {
   const botKeys = new Set(Object.keys(config.bots));
   let hasOrphanedAgents = false;
   for (const agent of config.agents) {
-    if (!botKeys.has(agent.bot)) {
+    if (agent.bot && !botKeys.has(agent.bot)) {
       console.log(`  ⚠ Agent "${agent.name}" references undefined bot "${agent.bot}"`);
       hasOrphanedAgents = true;
     }
