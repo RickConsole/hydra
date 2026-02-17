@@ -381,6 +381,7 @@ export async function sendChatMessage(agentId: string, message: string): Promise
   } catch (err) {
     const responseTime = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    logger.error({ agentId, err, errorMsg, responseTime }, 'Failed to send chat message');
     markAgentReady(agentId, responseTime, errorMsg);
     throw err;
   }
