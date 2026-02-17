@@ -1,7 +1,7 @@
 # Warmaster Agent Container
-# Extends base nanoclaw-agent with offensive/admin tools for VM management and pentesting
+# Extends base hydra-agent with offensive/admin tools for VM management and pentesting
 
-FROM nanoclaw-agent:latest
+FROM hydra-agent:latest
 
 # Switch to root to install packages
 USER root

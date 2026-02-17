@@ -129,17 +129,15 @@ Build the Hydra agent container:
 ./container/build.sh
 ```
 
-This creates the `hydra-agent:latest` image (or `nanoclaw-agent:latest` if using older naming) with Node.js, Chromium, Claude Code CLI, and agent-browser.
+This creates the `hydra-agent:latest` image with Node.js, Chromium, Claude Code CLI, and agent-browser.
 
 Verify the build succeeded:
 
 ```bash
 if which docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  echo '{}' | docker run -i --rm --entrypoint /bin/echo hydra-agent:latest "Container OK" 2>/dev/null || \
-  echo '{}' | docker run -i --rm --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
+  echo '{}' | docker run -i --rm --entrypoint /bin/echo hydra-agent:latest "Container OK" || echo "Container build failed"
 else
-  echo '{}' | container run -i --entrypoint /bin/echo hydra-agent:latest "Container OK" 2>/dev/null || \
-  echo '{}' | container run -i --entrypoint /bin/echo nanoclaw-agent:latest "Container OK" || echo "Container build failed"
+  echo '{}' | container run -i --entrypoint /bin/echo hydra-agent:latest "Container OK" || echo "Container build failed"
 fi
 ```
 

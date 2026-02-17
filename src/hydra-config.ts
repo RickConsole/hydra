@@ -39,7 +39,7 @@ const MountSchema = z.object({
  * Container configuration for an agent
  */
 const ContainerConfigSchema = z.object({
-  image: z.string().default('nanoclaw-agent:latest'),
+  image: z.string().default('hydra-agent:latest'),
   network_mode: z.enum(['bridge', 'host', 'none']).default('bridge'),
   timeout: z.number().default(300000).describe('Timeout in ms'),
   memory_limit: z.string().optional().describe('e.g., "2Gi"'),
@@ -286,7 +286,7 @@ export function generateConfigFromExisting(projectRoot: string): HydraConfig {
       // Convert container config
       if (group.containerConfig) {
         agent.container = {
-          image: group.containerConfig.image || 'nanoclaw-agent:latest',
+          image: group.containerConfig.image || 'hydra-agent:latest',
           network_mode: (group.containerConfig.networkMode as 'bridge' | 'host' | 'none') || 'bridge',
           timeout: 300000,
           mounts: (group.containerConfig.additionalMounts || []).map(m => ({
@@ -304,7 +304,7 @@ export function generateConfigFromExisting(projectRoot: string): HydraConfig {
 
   // Load mount allowlist if exists
   const homeDir = process.env.HOME || '/Users/user';
-  const allowlistPath = path.join(homeDir, '.config', 'nanoclaw', 'mount-allowlist.json');
+  const allowlistPath = path.join(homeDir, '.config', 'hydra', 'mount-allowlist.json');
   if (fs.existsSync(allowlistPath)) {
     const allowlistData = JSON.parse(fs.readFileSync(allowlistPath, 'utf-8'));
     config.security = {

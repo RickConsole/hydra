@@ -64,7 +64,7 @@ export const IPC_POLL_INTERVAL = hydraConfig?.runtime?.ipc_poll_interval ?? 1000
 export const MOUNT_ALLOWLIST_PATH = path.join(
   HOME_DIR,
   '.config',
-  'nanoclaw',
+  'hydra',
   'mount-allowlist.json',
 );
 export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
@@ -78,7 +78,7 @@ export const MAIN_GROUP_FOLDER = 'main';
 // ============================================================================
 
 export const CONTAINER_IMAGE =
-  process.env.CONTAINER_IMAGE || 'nanoclaw-agent:latest';
+  process.env.CONTAINER_IMAGE || 'hydra-agent:latest';
 export const CONTAINER_TIMEOUT = parseInt(
   process.env.CONTAINER_TIMEOUT || '300000',
   10,

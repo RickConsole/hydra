@@ -181,7 +181,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ### Mount Security
 
-The mount allowlist lives separately at `~/.config/hydra/mount-allowlist.json` — outside the container's reach. Even if an agent modifies `hydra.yaml`, it can't add mounts that aren't pre-approved.
+The mount allowlist lives separately at `~/.config/hydra/mount-allowlist.json` -- outside the container's reach. Even if an agent modifies `hydra.yaml`, it can't add mounts that aren't pre-approved.
 
 ## Supported Channels
 

@@ -1,4 +1,4 @@
-# NanoClaw
+# Hydra
 
 Personal Claude assistant. See [README.md](README.md) for philosophy and setup. See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for architecture decisions.
 
@@ -37,9 +37,9 @@ npm run build        # Compile TypeScript
 
 Service management:
 ```bash
-sudo systemctl start nanoclaw    # Start service
-sudo systemctl stop nanoclaw     # Stop service
-sudo systemctl restart nanoclaw  # Restart service
-sudo systemctl status nanoclaw   # Check status
-journalctl -u nanoclaw -f        # Follow logs
+sudo systemctl start hydra    # Start service
+sudo systemctl stop hydra     # Stop service
+sudo systemctl restart hydra  # Restart service
+sudo systemctl status hydra   # Check status
+journalctl -u hydra -f        # Follow logs
 ```

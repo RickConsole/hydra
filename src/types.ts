@@ -13,7 +13,7 @@ export interface AdditionalMount {
 
 /**
  * Mount Allowlist - Security configuration for additional mounts
- * This file should be stored at ~/.config/nanoclaw/mount-allowlist.json
+ * This file should be stored at ~/.config/hydra/mount-allowlist.json
  * and is NOT mounted into any container, making it tamper-proof from agents.
  */
 export interface MountAllowlist {
@@ -35,7 +35,7 @@ export interface AllowedRoot {
 }
 
 export interface ContainerConfig {
-  image?: string; // Container image to use (default: nanoclaw-agent:latest)
+  image?: string; // Container image to use (default: hydra-agent:latest)
   networkMode?: 'bridge' | 'host' | 'none'; // Docker network mode (default: bridge)
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build NanoClaw agent container images (base + specialized variants)
+# Build Hydra agent container images (base + specialized variants)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-IMAGE_NAME="nanoclaw-agent"
+IMAGE_NAME="hydra-agent"
 
 # Auto-detect container runtime
 if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then

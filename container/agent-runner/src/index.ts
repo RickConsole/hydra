@@ -1,5 +1,5 @@
 /**
- * NanoClaw Agent Runner
+ * Hydra Agent Runner
  * Runs inside a container, receives config via stdin, outputs result to stdout
  */
 
@@ -52,8 +52,8 @@ async function readStdin(): Promise<string> {
   });
 }
 
-const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
-const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+const OUTPUT_START_MARKER = '---HYDRA_OUTPUT_START---';
+const OUTPUT_END_MARKER = '---HYDRA_OUTPUT_END---';
 
 function writeOutput(output: ContainerOutput): void {
   console.log(OUTPUT_START_MARKER);
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
     // Text-only path (existing behavior)
     let textPrompt = input.prompt;
     if (input.isScheduledTask) {
-      textPrompt = `[SCHEDULED TASK - You are running automatically, not in response to a user message. Use mcp__nanoclaw__send_message if needed to communicate with the user.]\n\n${input.prompt}`;
+      textPrompt = `[SCHEDULED TASK - You are running automatically, not in response to a user message. Use mcp__hydra__send_message if needed to communicate with the user.]\n\n${input.prompt}`;
     }
     promptArg = textPrompt;
   } else {
@@ -301,14 +301,14 @@ async function main(): Promise<void> {
           'Bash',
           'Read', 'Write', 'Edit', 'Glob', 'Grep',
           'WebSearch', 'WebFetch',
-          'mcp__nanoclaw__*',
+          'mcp__hydra__*',
           ...(mem0Mcp ? ['mcp__mem0__*'] : [])
         ],
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         settingSources: ['project'],
         mcpServers: {
-          nanoclaw: ipcMcp,
+          hydra: ipcMcp,
           ...(mem0Mcp ? { mem0: mem0Mcp } : {})
         },
         hooks: {

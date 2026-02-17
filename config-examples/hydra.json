@@ -30,7 +30,7 @@
       "bot": "merlin",
       "chat_id": "-1002318593798",
       "container": {
-        "image": "nanoclaw-agent:latest",
+        "image": "hydra-agent:latest",
         "network_mode": "bridge",
         "timeout": 300000,
         "mounts": [
@@ -54,7 +54,7 @@
       "bot": "anton",
       "chat_id": "-1002345678901",
       "container": {
-        "image": "nanoclaw-agent:warmaster",
+        "image": "hydra-agent:warmaster",
         "network_mode": "host",
         "timeout": 600000,
         "mounts": [

@@ -40,7 +40,7 @@ agents:
     bot: merlin
     chat_id: "-1002318593798"
     container:
-      image: nanoclaw-agent:latest
+      image: hydra-agent:latest
       network_mode: bridge
       timeout: 300000
       mounts:
@@ -58,7 +58,7 @@ agents:
     bot: anton
     chat_id: "-1002345678901"
     container:
-      image: nanoclaw-agent:warmaster  # Custom image with security tools
+      image: hydra-agent:warmaster  # Custom image with security tools
       network_mode: host  # VPN access
       timeout: 600000
       mounts:

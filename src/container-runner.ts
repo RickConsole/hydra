@@ -1,5 +1,5 @@
 /**
- * Container Runner for NanoClaw
+ * Container Runner for Hydra
  * Spawns agent execution in Docker or Apple Container and handles IPC
  */
 import { spawn, execSync } from 'child_process';
@@ -19,8 +19,8 @@ import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
-const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
-const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+const OUTPUT_START_MARKER = '---HYDRA_OUTPUT_START---';
+const OUTPUT_END_MARKER = '---HYDRA_OUTPUT_END---';
 
 // Shared credentials source of truth
 const SOURCE_CREDENTIALS = path.join(
