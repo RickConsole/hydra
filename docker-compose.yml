@@ -45,6 +45,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp  # HAProxy config generation
+      - /run  # HAProxy pidfile
     security_opt:
       - no-new-privileges:true
 
