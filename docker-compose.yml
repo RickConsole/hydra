@@ -43,6 +43,8 @@ services:
       - hydra-internal
     # Run with minimal privileges
     read_only: true
+    tmpfs:
+      - /tmp  # HAProxy config generation
     security_opt:
       - no-new-privileges:true
 
