@@ -37,31 +37,37 @@ Most AI agent frameworks run everything in a single process with application-lev
 **Hydra agents run in containers.** Each agent is isolated at the OS level. They can only see what you explicitly mount. Bash commands execute inside the container, not on your host. Agent's cant break things even if they wanted to.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Your Machine                            │
-│                                                                 │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                   Hydra Orchestrator                      │  │
-│  │  • Routes messages from Telegram / Web Console / CLI       │  │
-│  │  • Manages agent lifecycle and sessions                   │  │
-│  │                                                           │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│           │              │              │              │        │
-│           ▼              ▼              ▼              ▼        │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐           │
-│  │  Container   │ │  Container   │ │  Container   │  ...      │
-│  │  ┌────────┐  │ │  ┌────────┐  │ │  ┌────────┐  │           │
-│  │  │ Claude │  │ │  │ Claude │  │ │  │ Claude │  │           │
-│  │  │ Agent  │  │ │  │ Agent  │  │ │  │ Agent  │  │           │
-│  │  └────────┘  │ │  └────────┘  │ │  └────────┘  │           │
-│  │              │ │              │ │              │           │
-│  │  /workspace/ │ │  /workspace/ │ │  /workspace/ │           │
-│  │  └─ group/   │ │  └─ group/   │ │  └─ group/   │           │
-│  │     (only    │ │     (only    │ │     (only    │           │
-│  │     its own) │ │     its own) │ │     its own) │           │
-│  └──────────────┘ └──────────────┘ └──────────────┘           │
-│       main            dev            family                    │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌──────────────┐
+                    │   hydra exec │  ← You are here (interactive CLI)
+                    └──────┬───────┘
+                           │
+          ┌────────────────┼─────────────────┐
+          │                │                 │
+          ▼                ▼                 ▼
+   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+   │  Container  │  │  Container  │  │  Container  │  ...
+   │             │  │             │  │             │
+   │ Claude Code │  │ Claude Code │  │ Claude Code │
+   │  (Agent SDK)│  │  (Agent SDK)│  │  (Agent SDK)│
+   │             │  │             │  │             │
+   │ /workspace/ │  │ /workspace/ │  │ /workspace/ │
+   │  └ agent/   │  │  └ agent/   │  │  └ agent/   │
+   │  └ extra/*  │  │  └ extra/*  │  │  └ extra/*  │
+   │  └ ipc/     │  │  └ ipc/     │  │  └ ipc/     │
+   └─────────────┘  └─────────────┘  └─────────────┘
+        main             dev            warmaster
+
+   Each container: isolated filesystem, own CLAUDE.md,
+   own session state, own mem0 memory, own IPC namespace.
+
+   ┌──────────────────────────────────────────────────┐
+   │  Optional: hydra up (background orchestrator)    │
+   │                                                  │
+   │  • Telegram bot listener                         │
+   │  • Task scheduler (cron, interval, once)         │
+   │  • IPC message routing                           │
+   │  • REST API + WebSocket (:3340)                  │
+   └──────────────────────────────────────────────────┘
 ```
 
 **Other key differences:**
