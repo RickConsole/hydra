@@ -82,9 +82,13 @@ function detectContainerRuntime(): 'docker' | 'container' {
   try {
     // Check if docker command exists and daemon is accessible
     // Use 'docker version' which works even with limited permissions
+    // Pass through DOCKER_HOST env var for remote docker (e.g., docker-proxy)
+    const env = process.env.DOCKER_HOST ? { DOCKER_HOST: process.env.DOCKER_HOST } : undefined;
     execSync('docker version --format "{{.Server.Version}}"', {
       stdio: 'ignore',
+      env: env ? { ...process.env, ...env } : process.env,
     });
+    logger.debug({ dockerHost: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock' }, 'Docker daemon accessible');
     return 'docker';
   } catch {
     // Docker not available or not running, try Apple Container
@@ -349,8 +353,14 @@ export async function runContainerAgent(
   copyCredentialsToGroup(groupSessionsDir);
 
   return new Promise((resolve) => {
+    // Pass DOCKER_HOST to child process for docker-proxy support
+    const spawnEnv = process.env.DOCKER_HOST
+      ? { ...process.env, DOCKER_HOST: process.env.DOCKER_HOST }
+      : process.env;
+
     const container = spawn(CONTAINER_RUNTIME, containerArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: spawnEnv,
     });
 
     let stdout = '';

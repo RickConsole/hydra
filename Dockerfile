@@ -32,8 +32,8 @@ RUN addgroup -g 1001 hydra && \
 
 WORKDIR /app
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# Install curl for healthcheck and docker CLI for container spawning
+RUN apk add --no-cache curl docker-cli
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
