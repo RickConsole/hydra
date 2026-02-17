@@ -128,6 +128,8 @@ services:
     ports:
       - "3340:3340"  # API port - consider binding to 127.0.0.1 in production
     volumes:
+      # Hydra config file
+      - ./hydra.yaml:/app/hydra.yaml:ro
       # Persistent data
       - ./data:/app/data
       - ./groups:/app/groups
