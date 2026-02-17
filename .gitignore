@@ -16,6 +16,9 @@ groups/*/conversations/
 .env
 .env.local
 
+# Agent data (user-specific, created via `hydra agent create`)
+agents/
+
 # Config files (user-specific)
 hydra.yaml
 mount-allowlist.json
