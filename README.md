@@ -148,7 +148,7 @@ agents:
 
 # Optional: Telegram bots
 bots:
-  merlin:
+  mydevbot:
     name: MyDevBot
     token: env:TELEGRAM_BOT_TOKEN  # References .env variable
     platform: telegram
