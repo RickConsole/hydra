@@ -215,7 +215,13 @@ function buildVolumeMounts(
 
   // Environment file directory (workaround for Apple Container -i env var bug)
   // Base vars always pass through; additional vars require group opt-in via allowedEnvVars
-  const baseVars = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'MEM0_API_KEY'];
+  const baseVars = [
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'ANTHROPIC_API_KEY',
+    'MEM0_API_KEY',      // Cloud mem0
+    'QDRANT_URL',        // Self-hosted mem0
+    'OPENAI_API_KEY',    // For embeddings in self-hosted mode
+  ];
   const groupEnvVars = group.containerConfig?.allowedEnvVars ?? [];
   const allowedVars = [...baseVars, ...groupEnvVars];
 

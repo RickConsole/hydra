@@ -1,0 +1,162 @@
+# Hydra - Secure AI Agent Platform
+#
+# Security considerations:
+# - Docker socket access is proxied with limited permissions
+# - Agent containers run with dropped capabilities and resource limits
+# - Internal network isolates services from agents
+# - Qdrant only accessible from orchestrator, not agents
+
+services:
+  # Docker Socket Proxy - limits what orchestrator can do with Docker
+  # This prevents the orchestrator from creating privileged containers,
+  # modifying networks, or other potentially dangerous operations
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      # Allow container operations (needed for agent spawning)
+      CONTAINERS: 1
+      IMAGES: 1
+      INFO: 1
+      VERSION: 1
+      # Block dangerous operations
+      NETWORKS: 0
+      VOLUMES: 0
+      SERVICES: 0
+      TASKS: 0
+      SECRETS: 0
+      CONFIGS: 0
+      PLUGINS: 0
+      SWARM: 0
+      NODES: 0
+      BUILD: 0
+      COMMIT: 0
+      EXEC: 0          # Prevent exec into containers
+      POST: 1          # Allow POST for container create/start
+      AUTH: 0
+      ALLOW_RESTARTS: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - hydra-internal
+    # Run with minimal privileges
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+  # Qdrant - Vector database for mem0
+  # Only accessible from internal network (orchestrator), not from agents
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - hydra-internal
+    # No external port exposure - only orchestrator can access
+    # Uncomment below for debugging only:
+    # ports:
+    #   - "6333:6333"
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readiness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  # Hydra Orchestrator - Core service
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3340:3340"  # API port - consider binding to 127.0.0.1 in production
+    volumes:
+      # Persistent data
+      - ./data:/app/data
+      - ./groups:/app/groups
+      - ./store:/app/store
+      - ./logs:/app/logs
+      # Claude credentials (read-only)
+      - ${HOME}/.claude:/home/node/.claude:ro
+      # Mount allowlist config (read-only)
+      - ${HOME}/.config/hydra:/home/node/.config/hydra:ro
+    environment:
+      # Use Docker socket proxy instead of direct socket
+      - DOCKER_HOST=tcp://docker-proxy:2375
+      # Qdrant connection
+      - QDRANT_URL=http://qdrant:6333
+      - MEM0_STORAGE=qdrant
+      # API configuration
+      - HYDRA_API_PORT=3340
+      - NODE_ENV=production
+    depends_on:
+      docker-proxy:
+        condition: service_started
+      qdrant:
+        condition: service_healthy
+    networks:
+      - hydra-internal
+      - hydra-agents  # Can communicate with agent containers
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3340/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+
+  # Hydra Console - Web UI
+  console:
+    build:
+      context: ./hydra-console
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Consider binding to 127.0.0.1 in production
+    environment:
+      - NEXT_PUBLIC_ORCHESTRATOR_URL=http://localhost:3340
+      - NODE_ENV=production
+    depends_on:
+      - orchestrator
+    networks:
+      - hydra-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Security hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  # Internal network for Hydra services
+  # Qdrant, orchestrator, console communicate here
+  hydra-internal:
+    driver: bridge
+    internal: false  # Needs external for console to be accessible
+
+  # Network for agent containers
+  # Orchestrator can reach agents, but agents are isolated
+  hydra-agents:
+    driver: bridge
+    internal: true  # No external access by default
+
+volumes:
+  qdrant_data:
+    driver: local

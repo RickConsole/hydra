@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+hydra-console/node_modules/
+
+# Build outputs
+dist/
+hydra-console/.next/
+
+# Development files
+*.log
+.env
+.env.local
+hydra.yaml
+
+# Data directories (mounted at runtime)
+data/
+store/
+logs/
+groups/*/logs/
+groups/*/conversations/
+
+# Git
+.git/
+.github/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Docs and examples (not needed in container)
+docs/
+*.md
+!README.md
