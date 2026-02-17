@@ -11,6 +11,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   HydraConfigSchema,
   loadHydraConfig,
+  toLegacyRegisteredGroups,
   type HydraConfig,
 } from '../hydra-config.js';
 import {
@@ -205,7 +206,22 @@ export async function updateConfig(
 
 // Get list of agents from config
 export function getAgents(): Agent[] {
-  const groups = deps?.getRegisteredGroups() || loadRegisteredGroups();
+  // First try registered_groups.json (legacy format)
+  let groups = deps?.getRegisteredGroups() || loadRegisteredGroups();
+
+  // If no registered groups, try loading from hydra.yaml
+  if (Object.keys(groups).length === 0) {
+    try {
+      const hydraConfig = loadHydraConfig();
+      if (hydraConfig.agents && hydraConfig.agents.length > 0) {
+        groups = toLegacyRegisteredGroups(hydraConfig);
+        logger.debug({ count: Object.keys(groups).length }, 'Loaded agents from hydra.yaml');
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Failed to load agents from hydra.yaml');
+    }
+  }
+
   const agents: Agent[] = [];
 
   for (const [jid, group] of Object.entries(groups)) {
@@ -237,7 +253,20 @@ export function getAgents(): Agent[] {
 
 // Find group by folder name
 function findGroupByFolder(folder: string): { jid: string; group: RegisteredGroup } | null {
-  const groups = deps?.getRegisteredGroups() || loadRegisteredGroups();
+  // First try registered_groups.json
+  let groups = deps?.getRegisteredGroups() || loadRegisteredGroups();
+
+  // If no registered groups, try loading from hydra.yaml
+  if (Object.keys(groups).length === 0) {
+    try {
+      const hydraConfig = loadHydraConfig();
+      if (hydraConfig.agents && hydraConfig.agents.length > 0) {
+        groups = toLegacyRegisteredGroups(hydraConfig);
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
 
   for (const [jid, group] of Object.entries(groups)) {
     if (group.folder === folder) {
