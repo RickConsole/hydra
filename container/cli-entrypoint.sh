@@ -1,11 +1,6 @@
 #!/bin/bash
 set -e
 
-# Source environment variables (same as agent-runner entrypoint)
-if [ -f /workspace/env-dir/env ]; then
-  set -a; source /workspace/env-dir/env; set +a
-fi
-
 # Set OAuth token from mounted credentials file if not already set via env
 if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -f "$HOME/.claude/.credentials.json" ]; then
   export CLAUDE_CODE_OAUTH_TOKEN=$(jq -r '.claudeAiOauth.accessToken // empty' "$HOME/.claude/.credentials.json")

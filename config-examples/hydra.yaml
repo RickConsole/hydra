@@ -31,24 +31,21 @@ agents:
     folder: main
     trigger: "@Anton"
     bot: anton
-    chat_id: "5446506042"  # Your personal chat ID
+    chat_id: "123456789"  # Your personal chat ID
 
   # Development assistant
   - name: Merlin (Dev)
     folder: merlin
     trigger: "@Merlin"
     bot: merlin
-    chat_id: "-1002318593798"
+    chat_id: "-1001234567890"
     container:
       image: hydra-agent:latest
       network_mode: bridge
       timeout: 300000
       mounts:
-        - host_path: ~/src/claymore
-          container_path: claymore
-          readonly: false
-        - host_path: ~/projects/obsidian/Claymore
-          container_path: obsidian
+        - host_path: ~/src/my-project
+          container_path: my-project
           readonly: false
 
   # Security/pentesting agent with elevated access
@@ -56,7 +53,7 @@ agents:
     folder: warmaster
     trigger: "@Warmaster"
     bot: anton
-    chat_id: "-1002345678901"
+    chat_id: "-1009876543210"
     container:
       image: hydra-agent:warmaster  # Custom image with security tools
       network_mode: host  # VPN access
@@ -65,6 +62,9 @@ agents:
         - host_path: ~/src
           container_path: src
           readonly: false
+      secrets:
+        - AWS_ACCESS_KEY_ID
+        - AWS_SECRET_ACCESS_KEY
 
 # =============================================================================
 # Security

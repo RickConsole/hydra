@@ -21,27 +21,22 @@
       "folder": "main",
       "trigger": "@Anton",
       "bot": "anton",
-      "chat_id": "5446506042"
+      "chat_id": "123456789"
     },
     {
       "name": "Merlin (Dev)",
       "folder": "merlin",
       "trigger": "@Merlin",
       "bot": "merlin",
-      "chat_id": "-1002318593798",
+      "chat_id": "-1001234567890",
       "container": {
         "image": "hydra-agent:latest",
         "network_mode": "bridge",
         "timeout": 300000,
         "mounts": [
           {
-            "host_path": "~/src/claymore",
-            "container_path": "claymore",
-            "readonly": false
-          },
-          {
-            "host_path": "~/projects/obsidian/Claymore",
-            "container_path": "obsidian",
+            "host_path": "~/src/my-project",
+            "container_path": "my-project",
             "readonly": false
           }
         ]
@@ -52,7 +47,7 @@
       "folder": "warmaster",
       "trigger": "@Warmaster",
       "bot": "anton",
-      "chat_id": "-1002345678901",
+      "chat_id": "-1009876543210",
       "container": {
         "image": "hydra-agent:warmaster",
         "network_mode": "host",

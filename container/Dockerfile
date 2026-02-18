@@ -3,7 +3,7 @@
 
 FROM node:22-slim
 
-# Install system dependencies for Chromium
+# Install system dependencies for Chromium + python3 for claude-pulse
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     git \
     unzip \
     jq \
+    python3 \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -48,8 +49,16 @@ RUN curl -s "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ub
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Install agent-browser and claude-code globally
-RUN npm install -g agent-browser @anthropic-ai/claude-code
+# Install agent-browser globally
+RUN npm install -g agent-browser
+
+# Install Claude Code natively (not via npm)
+ENV HOME=/home/node
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/home/node/.local/bin:$PATH"
+
+# Install claude-pulse (status line for Claude Code CLI)
+RUN git clone --depth 1 https://github.com/NoobyGains/claude-pulse.git /opt/claude-pulse
 
 # Create app directory
 WORKDIR /app
@@ -70,12 +79,15 @@ RUN npm run build
 RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks
 
 # Create entrypoint script
-# Sources env from mounted /workspace/env-dir/env if it exists (workaround for Apple Container -i bug)
-# Uses set -a to export all variables, handles special chars like # in values
-RUN printf '#!/bin/bash\nset -e\nif [ -f /workspace/env-dir/env ]; then\n  set -a\n  source /workspace/env-dir/env\n  set +a\nfi\ncat > /tmp/input.json\nnode /app/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+# Env vars are injected via Docker -e flags from secrets.env
+RUN printf '#!/bin/bash\nset -e\ncat > /tmp/input.json\nnode /app/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Copy CLI entrypoint for interactive sessions (hydra exec)
+COPY cli-entrypoint.sh /app/cli-entrypoint.sh
+RUN chmod +x /app/cli-entrypoint.sh
 
 # Set ownership to node user (non-root) for writable directories
-RUN chown -R node:node /workspace
+RUN mkdir -p /home/node/.cache && chown -R node:node /workspace /home/node/.cache
 
 # Switch to non-root user (required for --dangerously-skip-permissions)
 USER node

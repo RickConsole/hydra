@@ -37,7 +37,7 @@ server.tool(
   'send_message',
   'Send a message to the current chat. Use this to proactively share information or updates.',
   { text: z.string().describe('The message text to send') },
-  async (args) => {
+  async (args: { text: string }) => {
     const data = {
       type: 'message',
       chatJid,
@@ -71,7 +71,7 @@ SCHEDULE VALUE FORMAT (all times LOCAL):
     context_mode: z.enum(['group', 'isolated']).default('group'),
     target_agent: z.string().optional().describe('Target agent folder (main only)'),
   },
-  async (args) => {
+  async (args: { prompt: string; schedule_type: 'cron' | 'interval' | 'once'; schedule_value: string; context_mode?: 'group' | 'isolated'; target_agent?: string }) => {
     if (args.schedule_type === 'cron') {
       try {
         CronExpressionParser.parse(args.schedule_value);
@@ -154,7 +154,7 @@ server.tool(
   'pause_task',
   'Pause a scheduled task.',
   { task_id: z.string().describe('The task ID to pause') },
-  async (args) => {
+  async (args: { task_id: string }) => {
     writeIpcFile(TASKS_DIR, {
       type: 'pause_task',
       taskId: args.task_id,
@@ -170,7 +170,7 @@ server.tool(
   'resume_task',
   'Resume a paused task.',
   { task_id: z.string().describe('The task ID to resume') },
-  async (args) => {
+  async (args: { task_id: string }) => {
     writeIpcFile(TASKS_DIR, {
       type: 'resume_task',
       taskId: args.task_id,
@@ -186,7 +186,7 @@ server.tool(
   'cancel_task',
   'Cancel and delete a scheduled task.',
   { task_id: z.string().describe('The task ID to cancel') },
-  async (args) => {
+  async (args: { task_id: string }) => {
     writeIpcFile(TASKS_DIR, {
       type: 'cancel_task',
       taskId: args.task_id,

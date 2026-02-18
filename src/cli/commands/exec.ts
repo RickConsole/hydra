@@ -23,6 +23,7 @@ import {
   getContainerRuntime,
 } from '../../container-runner.js';
 import { DATA_DIR, AGENTS_DIR } from '../../config.js';
+import { resolveContainerSecrets } from '../../secrets.js';
 
 export async function run(args: string[]): Promise<void> {
   // First arg is the agent folder name, everything after is passed to claude
@@ -134,8 +135,9 @@ export async function run(args: string[]): Promise<void> {
     fs.copyFileSync(hostConfigJson, agentConfigJson);
   }
 
-  // Read OAuth token from credentials to pass as env var
+  // Resolve secrets from ~/.config/hydra/secrets.env
   const envVars: Record<string, string> = {
+    ...resolveContainerSecrets(agent.container?.secrets ?? []),
     HYDRA_AGENT_FOLDER: agent.folder,
     HYDRA_CHAT_JID: `cli:local:${agent.folder}`,
     HYDRA_IS_MAIN: String(isMain),
@@ -146,6 +148,25 @@ export async function run(args: string[]): Promise<void> {
     envVars.ANTHROPIC_MODEL = agent.model;
   }
 
+  // Rewrite localhost/internal URLs to host.docker.internal for bridge-mode containers
+  const networkMode = agent.container?.network_mode || 'bridge';
+  if (networkMode !== 'host') {
+    const rewriteUrl = (url: string): string => {
+      try {
+        const parsed = new URL(url);
+        const internalHosts = ['qdrant', 'ollama', 'localhost', '127.0.0.1'];
+        if (internalHosts.includes(parsed.hostname)) {
+          parsed.hostname = 'host.docker.internal';
+          return parsed.toString().replace(/\/$/, '');
+        }
+      } catch { /* not a URL, pass through */ }
+      return url;
+    };
+    if (envVars.QDRANT_URL) envVars.QDRANT_URL = rewriteUrl(envVars.QDRANT_URL);
+    if (envVars.OLLAMA_URL) envVars.OLLAMA_URL = rewriteUrl(envVars.OLLAMA_URL);
+  }
+
+  // Override OAuth token from credentials file (freshest source)
   const credentialsPath = path.join(
     process.env.HOME || os.homedir(),
     '.claude',

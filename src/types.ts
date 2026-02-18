@@ -39,8 +39,7 @@ export interface ContainerConfig {
   networkMode?: 'bridge' | 'host' | 'none'; // Docker network mode (default: bridge)
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
-  env?: Record<string, string>;
-  allowedEnvVars?: string[]; // Additional .env keys this group can access (beyond base auth vars)
+  secrets?: string[];
 }
 
 export interface RegisteredGroup {

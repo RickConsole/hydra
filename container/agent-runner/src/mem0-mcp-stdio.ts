@@ -27,7 +27,7 @@ const ctx: Mem0McpContext = {
   qdrantUrl,
   ollamaUrl,
   embeddingApiKey,
-  agentFolder,
+  groupFolder: agentFolder,
 };
 
 // We can't use the SDK MCP server directly with stdio transport (it's a different format).
@@ -140,7 +140,7 @@ server.tool(
     query: z.string().describe('Natural language search query'),
     limit: z.number().optional().default(10).describe('Max results to return (default 10)'),
   },
-  async (args) => {
+  async (args: { query: string; limit: number }) => {
     try {
       const client = await getClient();
       const results = await client.search(args.query, { user_id: agentFolder, limit: args.limit });
@@ -164,7 +164,7 @@ server.tool(
     content: z.string().describe('The memory content to store'),
     role: z.enum(['user', 'assistant']).optional().default('user').describe('Role of the message (default: user)'),
   },
-  async (args) => {
+  async (args: { content: string; role: 'user' | 'assistant' }) => {
     try {
       const client = await getClient();
       const result = await client.add([{ role: args.role, content: args.content }], { user_id: agentFolder });
@@ -203,7 +203,7 @@ server.tool(
   'memory_get',
   'Get a specific memory by its ID.',
   { memory_id: z.string().describe('The memory ID to retrieve') },
-  async (args) => {
+  async (args: { memory_id: string }) => {
     try {
       const client = await getClient();
       const result = await client.get(args.memory_id);
@@ -221,7 +221,7 @@ server.tool(
   'memory_forget',
   'Delete a memory by its ID.',
   { memory_id: z.string().describe('The memory ID to delete') },
-  async (args) => {
+  async (args: { memory_id: string }) => {
     try {
       const client = await getClient();
       const result = await client.delete(args.memory_id);

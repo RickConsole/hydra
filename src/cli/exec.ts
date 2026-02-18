@@ -24,6 +24,7 @@ import {
   getContainerRuntime,
 } from '../container-runner.js';
 import { DATA_DIR, AGENTS_DIR } from '../config.js';
+import { resolveContainerSecrets } from '../secrets.js';
 
 const args = process.argv.slice(2);
 
@@ -136,14 +137,33 @@ if (fs.existsSync(hostConfigJson)) {
   fs.copyFileSync(hostConfigJson, agentConfigJson);
 }
 
-// Read OAuth token from credentials to pass as env var
-// (env-dir may not exist if there's no .env file)
+// Resolve secrets from ~/.config/hydra/secrets.env
 const envVars: Record<string, string> = {
+  ...resolveContainerSecrets(agent.container?.secrets ?? []),
   HYDRA_AGENT_FOLDER: agent.folder,
   HYDRA_CHAT_JID: `cli:local:${agent.folder}`,
   HYDRA_IS_MAIN: String(isMain),
 };
 
+// Rewrite localhost/internal URLs to host.docker.internal for bridge-mode containers
+const networkMode = agent.container?.network_mode || 'bridge';
+if (networkMode !== 'host') {
+  const rewriteUrl = (url: string): string => {
+    try {
+      const parsed = new URL(url);
+      const internalHosts = ['qdrant', 'ollama', 'localhost', '127.0.0.1'];
+      if (internalHosts.includes(parsed.hostname)) {
+        parsed.hostname = 'host.docker.internal';
+        return parsed.toString().replace(/\/$/, '');
+      }
+    } catch { /* not a URL, pass through */ }
+    return url;
+  };
+  if (envVars.QDRANT_URL) envVars.QDRANT_URL = rewriteUrl(envVars.QDRANT_URL);
+  if (envVars.OLLAMA_URL) envVars.OLLAMA_URL = rewriteUrl(envVars.OLLAMA_URL);
+}
+
+// Override OAuth token from credentials file (freshest source)
 const credentialsPath = path.join(
   process.env.HOME || os.homedir(),
   '.claude',
@@ -159,35 +179,6 @@ try {
   }
 } catch {
   // Fall through — credentials file missing or invalid
-}
-
-// Inject memory env vars from hydra.yaml so the mem0 MCP server works in CLI sessions
-const memory = config.memory;
-if (memory && memory.provider !== 'none') {
-  if (memory.provider === 'mem0' && memory.api_key) {
-    envVars.MEM0_API_KEY = memory.api_key;
-  } else if (memory.provider === 'qdrant' && memory.qdrant_url) {
-    // Rewrite localhost/internal URLs to host.docker.internal for bridge-mode containers
-    const rewriteUrl = (url: string): string => {
-      try {
-        const parsed = new URL(url);
-        const internalHosts = ['qdrant', 'ollama', 'localhost', '127.0.0.1'];
-        if (internalHosts.includes(parsed.hostname)) {
-          parsed.hostname = 'host.docker.internal';
-          return parsed.toString().replace(/\/$/, '');
-        }
-      } catch { /* not a URL, pass through */ }
-      return url;
-    };
-
-    const networkMode = agent.container?.network_mode || 'bridge';
-    const rewrite = networkMode !== 'host';
-
-    envVars.QDRANT_URL = rewrite ? rewriteUrl(memory.qdrant_url) : memory.qdrant_url;
-    if (memory.ollama_url) {
-      envVars.OLLAMA_URL = rewrite ? rewriteUrl(memory.ollama_url) : memory.ollama_url;
-    }
-  }
 }
 
 // Build volume mounts and container args

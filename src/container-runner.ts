@@ -16,6 +16,7 @@ import {
 } from './config.js';
 import { logger } from './logger.js';
 import { validateAdditionalMounts } from './mount-security.js';
+import { resolveContainerSecrets } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
@@ -217,52 +218,6 @@ export function buildVolumeMounts(
     readonly: false,
   });
 
-  // Environment file directory (workaround for Apple Container -i env var bug)
-  // Base vars always pass through; additional vars require group opt-in via allowedEnvVars
-  const baseVars = [
-    'CLAUDE_CODE_OAUTH_TOKEN',
-    'ANTHROPIC_API_KEY',
-    'MEM0_API_KEY',      // Cloud mem0
-    'QDRANT_URL',        // Self-hosted mem0 vector store
-    'OLLAMA_URL',        // Self-hosted mem0 embeddings (local, no API key needed)
-    'OPENAI_API_KEY',    // For embeddings in self-hosted mode (optional)
-  ];
-  const groupEnvVars = group.containerConfig?.allowedEnvVars ?? [];
-  const allowedVars = [...baseVars, ...groupEnvVars];
-
-  const envDir = path.join(DATA_DIR, 'env', group.folder);
-  fs.mkdirSync(envDir, { recursive: true });
-  const envFile = path.join(projectRoot, '.env');
-  if (fs.existsSync(envFile)) {
-    const envContent = fs.readFileSync(envFile, 'utf-8');
-    const quotedLines: string[] = [];
-
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx === -1) continue;
-
-      const varName = trimmed.slice(0, eqIdx);
-      const varValue = trimmed.slice(eqIdx + 1);
-
-      if (allowedVars.includes(varName)) {
-        // Quote values to handle special chars like # in OAuth tokens
-        quotedLines.push(`${varName}='${varValue.replace(/'/g, "'\\''")}'`);
-      }
-    }
-
-    if (quotedLines.length > 0) {
-      fs.writeFileSync(path.join(envDir, 'env'), quotedLines.join('\n') + '\n');
-      mounts.push({
-        hostPath: envDir,
-        containerPath: '/workspace/env-dir',
-        readonly: true,
-      });
-    }
-  }
-
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
@@ -274,6 +229,14 @@ export function buildVolumeMounts(
   }
 
   return mounts;
+}
+
+/**
+ * Resolve env vars to inject into a container via -e flags.
+ * Uses secrets.env as the source of truth.
+ */
+export function resolveContainerEnvVars(group: RegisteredGroup): Record<string, string> {
+  return resolveContainerSecrets(group.containerConfig?.secrets ?? []);
 }
 
 export interface ContainerRunOptions {
@@ -309,27 +272,14 @@ export function buildContainerArgs(
     }
   }
 
-  // Network mode (Docker only - Apple Container doesn't support this)
-  if (CONTAINER_RUNTIME === 'docker' && containerConfig?.networkMode) {
+  // Network mode
+  if (containerConfig?.networkMode) {
     args.push('--network', containerConfig.networkMode);
   }
 
   for (const mount of mounts) {
-    if (CONTAINER_RUNTIME === 'docker') {
-      // Docker: use --mount for both readonly and read-write
-      const mountOpts = `type=bind,source=${mount.hostPath},target=${mount.containerPath}${mount.readonly ? ',readonly' : ''}`;
-      args.push('--mount', mountOpts);
-    } else {
-      // Apple Container: --mount for readonly, -v for read-write
-      if (mount.readonly) {
-        args.push(
-          '--mount',
-          `type=bind,source=${mount.hostPath},target=${mount.containerPath},readonly`,
-        );
-      } else {
-        args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
-      }
-    }
+    const mountOpts = `type=bind,source=${mount.hostPath},target=${mount.containerPath}${mount.readonly ? ',readonly' : ''}`;
+    args.push('--mount', mountOpts);
   }
 
   // Use per-group image if specified, otherwise default
@@ -354,7 +304,9 @@ export async function runContainerAgent(
   fs.mkdirSync(groupDir, { recursive: true });
 
   const mounts = buildVolumeMounts(group, input.isMain);
-  const containerArgs = buildContainerArgs(mounts, group.containerConfig);
+  const containerArgs = buildContainerArgs(mounts, group.containerConfig, {
+    envVars: resolveContainerEnvVars(group),
+  });
 
   logger.debug(
     {

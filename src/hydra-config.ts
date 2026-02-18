@@ -45,7 +45,7 @@ const ContainerConfigSchema = z.object({
   memory_limit: z.string().optional().describe('e.g., "2Gi"'),
   cpu_limit: z.string().optional().describe('e.g., "1"'),
   mounts: z.array(MountSchema).default(() => []),
-  env: z.record(z.string(), z.string()).default(() => ({})),
+  secrets: z.array(z.string()).default(() => []),
 });
 
 /**
@@ -294,7 +294,7 @@ export function generateConfigFromExisting(projectRoot: string): HydraConfig {
             container_path: m.containerPath,
             readonly: m.readonly ?? true,
           })),
-          env: {},
+          secrets: [],
         };
       }
 
@@ -378,6 +378,7 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
     image?: string;
     networkMode?: 'bridge' | 'host' | 'none';
     additionalMounts?: Array<{ hostPath: string; containerPath: string; readonly?: boolean }>;
+    secrets?: string[];
   };
 }> {
   const result: Record<string, {
@@ -389,6 +390,7 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
       image?: string;
       networkMode?: 'bridge' | 'host' | 'none';
       additionalMounts?: Array<{ hostPath: string; containerPath: string; readonly?: boolean }>;
+      secrets?: string[];
     };
   }> = {};
 
@@ -410,6 +412,7 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
           containerPath: m.container_path,
           readonly: m.readonly,
         })),
+        secrets: agent.container.secrets,
       };
     }
   }
