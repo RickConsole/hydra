@@ -22,6 +22,7 @@ Single Node.js process that connects to WhatsApp, routes messages to Claude Agen
 | Skill | When to Use |
 |-------|-------------|
 | `/setup` | First-time installation, authentication, service configuration |
+| `/add-agent` | Creating new agents with persona, mounts, Telegram, and secrets |
 | `/customize` | Adding channels, integrations, changing behavior |
 | `/debug` | Container issues, logs, troubleshooting |
 

@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Run initial Hydra setup. Use when user wants to install dependencies, create hydra.yaml, configure agents, or start services. Triggers on "setup", "install", "configure hydra", "create agent", or first-time setup requests.
+description: Run initial Hydra setup. Use when user wants to install dependencies, create hydra.yaml, configure services, or do first-time setup. Triggers on "setup", "install", "configure hydra", or first-time setup requests. For creating agents after initial setup, use /add-agent instead.
 ---
 
 # Hydra Setup
@@ -281,9 +281,9 @@ If validation fails, read the error and fix the config. Common issues:
 - Invalid folder names (must be `^[a-z0-9_-]+$`)
 - Missing `version: "1"`
 
-## 5. Create Agents
+## 5. Create First Agent
 
-Now create agents. `hydra agent create` does two things: creates the `agents/<folder>/CLAUDE.md` persona file AND appends the agent entry to `hydra.yaml`.
+Create a basic first agent to get started. `hydra agent create` creates `agents/<folder>/CLAUDE.md` and appends a basic entry to `hydra.yaml`.
 
 Ask:
 > What should your first agent be called?
@@ -297,9 +297,7 @@ Folder must match `^[a-z0-9_-]+$`.
 hydra agent create --name "<AGENT_NAME>" --folder <AGENT_FOLDER>
 ```
 
-If the user set up Telegram in step 4, you need to **manually edit hydra.yaml** to add `trigger`, `bot`, and `chat_id` to the agent entry that `hydra agent create` just appended. The command only adds `name` and `folder`.
-
-Read the current `hydra.yaml`, find the agent entry, and update it:
+If the user set up Telegram in step 4, **edit hydra.yaml** to add `trigger`, `bot`, and `chat_id` to the agent entry:
 
 ```yaml
 agents:
@@ -310,28 +308,23 @@ agents:
     chat_id: ""               # Add this — auto-populated when user messages the bot
 ```
 
-If the user configured external mounts for this agent, also add the `container:` block:
+If the user configured external mounts in step 4, also add the `container:` block:
 
 ```yaml
     container:
-      image: hydra-agent:latest
       mounts:
         - host_path: <~/path>
           container_path: <name>
           readonly: false
 ```
 
-After creation, tell the user:
-> Edit `agents/<FOLDER>/CLAUDE.md` to customize the agent's persona.
-
-Ask:
-> Do you want to create another agent?
-
-Repeat for each additional agent. Validate after all agents are added:
-
+Validate:
 ```bash
 hydra config validate
 ```
+
+Tell the user:
+> Your first agent is ready! To customize its persona, add more mounts, or create additional agents, use `/add-agent`.
 
 ## 6. Test with Interactive CLI
 

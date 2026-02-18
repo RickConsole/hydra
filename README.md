@@ -25,7 +25,7 @@
 
 <p align="center">
   <strong>Agentic Frameworks Done The Right Way</strong><br>
-  One config file. Real isolation. Full control.
+  One config file. True isolation. Full control.
 </p>
 
 ---
@@ -97,28 +97,60 @@ Each agent has its own:
 
 ## Quick Start
 
+### Guided (recommended)
+
+The `/setup` skill handles config creation, `.env`, agent setup, and container build interactively:
+
 ```bash
 git clone https://github.com/RickConsole/hydra.git
 cd hydra
-npm install
-npm run build
+npm install && npm run build && npm link
 ./container/build.sh
-npm link
+claude          # then run /setup inside the session
+```
 
-# Create your first agent
-hydra agent create my-agent
+### Manual
 
-# Add your API key
+```bash
+git clone https://github.com/RickConsole/hydra.git
+cd hydra
+npm install && npm run build && npm link
+./container/build.sh
+
+# Create .env with your API key
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 
-# Start and interact
-hydra up
-hydra exec my-agent
+# Create a minimal hydra.yaml
+cat <<'EOF' > hydra.yaml
+version: "1"
+project: my-project
+agents:
+  - name: Main
+    folder: main
+EOF
+
+# Create your first agent and start a session
+hydra agent create --name "Main" --folder main
+hydra exec main
 ```
 
 ## Configuration
 
-Everything lives in one file: `hydra.yaml`
+Everything lives in one file: `hydra.yaml`.
+
+### Minimal config
+
+The smallest working config — just a version and one agent:
+
+```yaml
+version: "1"
+project: my-project
+agents:
+  - name: Main
+    folder: main
+```
+
+### Full config
 
 ```yaml
 version: "1"
@@ -136,24 +168,23 @@ agents:
 
   - name: Dev Helper
     folder: dev
-    bot: mydevbot                    # Optional: connect to Telegram
-    chat_id: "-1009876540010"        # Optional: Telegram chat ID between you and the bot
+    bot: mydevbot                    # Connect to Telegram
+    chat_id: "-1009876540010"        # Telegram chat ID
     container:
-      image: hydra-agent:custom
       timeout: 600000
       mounts:
         - host_path: ~/src
           container_path: src
           readonly: false
 
-# Optional: Telegram bots
+# Telegram bots
 bots:
   mydevbot:
     name: MyDevBot
-    token: env:TELEGRAM_BOT_TOKEN  # References .env variable
+    token: env:TELEGRAM_BOT_TOKEN   # References .env variable
     platform: telegram
 
-# Optional: Self-hosted memory (requires `hydra infra up`)
+# Self-hosted memory (requires `hydra infra up`)
 memory:
   provider: qdrant
   qdrant_url: http://localhost:6333
@@ -172,17 +203,17 @@ security:
 
 ### Environment Variables
 
-Sensitive values use `env:VAR_NAME` syntax:
+Sensitive values use `env:VAR_NAME` syntax in `hydra.yaml`:
 
 ```yaml
 token: env:TELEGRAM_BOT_TOKEN
 ```
 
-Create a `.env` file:
+Create a `.env` file in the project root:
 
 ```
-TELEGRAM_BOT_TOKEN=123456:ABC...
 ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:ABC...
 ```
 
 ### Mount Security (Two-File Model)
@@ -192,7 +223,7 @@ Mounts require approval from **two** independent config files:
 1. **`hydra.yaml`** — declares what an agent *wants* mounted (lives in the project)
 2. **`~/.config/hydra/mount-allowlist.json`** — declares what's *allowed* to be mounted (lives outside the project)
 
-Both must agree for a mount to work. This is intentional: even if an agent modifies `hydra.yaml`, it can't grant itself access to paths that aren't pre-approved in the external allowlist. The allowlist is never mounted into containers and can't be reached by agents.
+Both must agree for a mount to work. Even if an agent modifies `hydra.yaml`, it can't grant itself access to paths that aren't pre-approved in the external allowlist. The allowlist is never mounted into containers and can't be reached by agents.
 
 ```json
 // ~/.config/hydra/mount-allowlist.json
@@ -206,6 +237,22 @@ Both must agree for a mount to work. This is intentional: even if an agent modif
 ```
 
 If the allowlist file doesn't exist, **all additional mounts are blocked** by default.
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `hydra up [-f]` | Start orchestrator (daemon; `-f` for foreground) |
+| `hydra down` | Stop orchestrator and infrastructure |
+| `hydra status` | Show orchestrator/agent status |
+| `hydra exec <agent> [args]` | Interactive Claude Code session in agent container |
+| `hydra agents` | List configured agents |
+| `hydra agent create --name "X" --folder x` | Create new agent (or run without flags for interactive) |
+| `hydra tasks` | List scheduled tasks |
+| `hydra logs [agent] [-n N]` | Tail orchestrator or agent logs |
+| `hydra config validate [path]` | Validate `hydra.yaml` |
+
+**Claude Code skills:** Run `claude` in the project root, then use `/setup` for first-time installation or `/add-agent` to create agents with Telegram, mounts, and secrets.
 
 ## Supported Channels
 
