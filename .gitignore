@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+.next/
+hydra-console/
 
 # Local data & auth
 store/
