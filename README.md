@@ -325,6 +325,9 @@ Hydra is designed to be small enough to understand and modify. PRs welcome for:
 
 For new features, consider whether they belong in core or as optional extensions.
 
+## Credits
+Shoutout to Nanoclaw (https://github.com/qwibitai/nanoclaw) which was the inspiration for agentic containerization.
+
 ## License
 
 AGPL-3.0
