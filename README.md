@@ -30,6 +30,8 @@
 
 ---
 
+Check out the official [blog post](https://blog.evilwizard.io/posts/2026-02-18-hydra-a-secure-way-to-use-ai-agents/) or on [medium](https://medium.com/@rickconsole/hydra-a-secure-way-to-use-ai-agents-f828bbaef60e)
+
 ## What Makes Hydra Different
 
 Most AI agent frameworks run everything in a single process with application-level permission checks. If the agent can execute code, it can access anything the process can access. Security is an afterthought.
