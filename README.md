@@ -117,8 +117,9 @@ cd hydra
 npm install && npm run build && npm link
 ./container/build.sh
 
-# Create .env with your API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+# Add your API key to secrets.env (outside project root, never mounted)
+mkdir -p ~/.config/hydra
+echo "ANTHROPIC_API_KEY=sk-ant-..." > ~/.config/hydra/secrets.env
 
 # Create a minimal hydra.yaml
 cat <<'EOF' > hydra.yaml
@@ -176,6 +177,9 @@ agents:
         - host_path: ~/src
           container_path: src
           readonly: false
+      secrets:                       # Per-agent secrets from secrets.env
+        - AWS_ACCESS_KEY_ID
+        - AWS_SECRET_ACCESS_KEY
 
 # Telegram bots
 bots:
@@ -203,18 +207,39 @@ security:
 
 ### Environment Variables
 
-Sensitive values use `env:VAR_NAME` syntax in `hydra.yaml`:
+Sensitive values in `hydra.yaml` use `env:VAR_NAME` syntax to reference the host environment:
 
 ```yaml
 token: env:TELEGRAM_BOT_TOKEN
 ```
 
-Create a `.env` file in the project root:
+These are resolved at config load time from whatever is in your shell environment or `.env` file. This is for **Hydra's own config** (bot tokens, etc.) — not for what gets passed into containers.
 
-```
+### Secrets (Container Injection)
+
+Agent containers receive secrets from `~/.config/hydra/secrets.env` — a dedicated file that lives **outside the project root** and is never mounted into any container. This follows the same tamper-proof principle as the mount allowlist.
+
+```bash
+# ~/.config/hydra/secrets.env
 ANTHROPIC_API_KEY=sk-ant-...
-TELEGRAM_BOT_TOKEN=123456:ABC...
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+CUSTOM_TOKEN=abc123
 ```
+
+A set of base variables (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `MEM0_API_KEY`, `QDRANT_URL`, `OLLAMA_URL`, `OPENAI_API_KEY`) are injected into **every** container if present. Additional secrets are opt-in per agent:
+
+```yaml
+agents:
+  - name: Deploy Bot
+    folder: deploy
+    container:
+      secrets:
+        - AWS_ACCESS_KEY_ID
+        - AWS_SECRET_ACCESS_KEY
+```
+
+Only the keys listed in `secrets` (plus the base vars) are injected. An agent can't access secrets it hasn't been granted — even if they exist in `secrets.env`.
 
 ### Mount Security (Two-File Model)
 
@@ -269,23 +294,24 @@ If the allowlist file doesn't exist, **all additional mounts are blocked** by de
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | One of these | API key for Claude |
-| `CLAUDE_CODE_OAUTH_TOKEN` | One of these | OAuth token from Claude Code |
-| `TELEGRAM_BOT_TOKEN` | For Telegram | Bot token from @BotFather |
-| `QDRANT_URL` | For self-hosted memory | Qdrant vector DB URL (default: `http://localhost:6333`) |
-| `OLLAMA_URL` | For self-hosted memory | Ollama embedding server URL (default: `http://localhost:11434`) |
-| `HYDRA_API_PORT` | No | API server port (default: 3340) |
-| `HYDRA_API_ENABLED` | No | Set to `false` to disable API |
+Container secrets go in `~/.config/hydra/secrets.env`. Host-side config (bot tokens, etc.) can use `.env` in the project root or your shell environment.
+
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `ANTHROPIC_API_KEY` | `secrets.env` | API key for Claude (injected into all containers) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `secrets.env` | OAuth token from Claude Code (auto-managed) |
+| `TELEGRAM_BOT_TOKEN` | `.env` / shell | Bot token from @BotFather (host-side only) |
+| `QDRANT_URL` | `secrets.env` | Qdrant vector DB URL (default: `http://localhost:6333`) |
+| `OLLAMA_URL` | `secrets.env` | Ollama embedding server URL (default: `http://localhost:11434`) |
 
 ## Security Model
 
 1. **Container isolation** — Each agent runs in a separate container
 2. **Explicit mounts** — Agents can only see mounted directories
-3. **IPC namespacing** — Agents can only send messages to their own chats
-4. **External allowlist** — Mount permissions live outside agent reach
-5. **Main privilege** — Only the `main` agent can register new agents
+3. **Scoped secrets** — Agents only receive secrets they're granted in `hydra.yaml`; source file lives outside project root
+4. **IPC namespacing** — Agents can only send messages to their own chats
+5. **External allowlist** — Mount permissions live outside agent reach
+6. **Main privilege** — Only the `main` agent can register new agents
 
 See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
 
