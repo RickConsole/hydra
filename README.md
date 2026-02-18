@@ -287,7 +287,7 @@ If the allowlist file doesn't exist, **all additional mounts are blocked** by de
 ## Requirements
 
 - Node.js 20+
-- Docker + Docker Compose (for self-hosted memory and web console)
+- Docker + Docker Compose (for self-hosted memory)
 - Anthropic API key or Claude Code OAuth
 - Telegram bot token (optional)
 
