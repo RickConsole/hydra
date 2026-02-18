@@ -7,7 +7,7 @@
 | Main group | Trusted | Private self-chat, admin control |
 | Non-main groups | Untrusted | Other users may be malicious |
 | Container agents | Sandboxed | Isolated execution environment |
-| External messages (Telegram, web console) | User input | Potential prompt injection |
+| External messages (Telegram) | User input | Potential prompt injection |
 
 ## Security Boundaries
 

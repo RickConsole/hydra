@@ -1,6 +1,6 @@
 /**
  * Container Runner for Hydra
- * Spawns agent execution in Docker or Apple Container and handles IPC
+ * Spawns agent execution in Docker containers and handles IPC
  */
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
@@ -77,12 +77,10 @@ export function writeBackCredentialsIfNewer(groupSessionsDir: string): void {
   }
 }
 
-// Detect container runtime (Docker or Apple Container)
-export function detectContainerRuntime(): 'docker' | 'container' {
-  // Check for Docker first (prefer Docker on Linux)
+// Verify Docker is available
+export function detectContainerRuntime(): 'docker' {
   try {
     // Check if docker command exists and daemon is accessible
-    // Use 'docker version' which works even with limited permissions
     // Pass through DOCKER_HOST env var for remote docker (e.g., docker-proxy)
     const env = process.env.DOCKER_HOST ? { DOCKER_HOST: process.env.DOCKER_HOST } : undefined;
     execSync('docker version --format "{{.Server.Version}}"', {
@@ -92,20 +90,14 @@ export function detectContainerRuntime(): 'docker' | 'container' {
     logger.debug({ dockerHost: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock' }, 'Docker daemon accessible');
     return 'docker';
   } catch {
-    // Docker not available or not running, try Apple Container
+    // Last resort: check if docker binary exists (user may have group perms at runtime)
     try {
-      execSync('container --version', { stdio: 'ignore' });
-      return 'container';
+      execSync('which docker', { stdio: 'ignore' });
+      return 'docker';
     } catch {
-      // Last resort: check if docker binary exists (user may have group perms at runtime)
-      try {
-        execSync('which docker', { stdio: 'ignore' });
-        return 'docker';
-      } catch {
-        throw new Error(
-          'No container runtime found. Install Docker or Apple Container.',
-        );
-      }
+      throw new Error(
+        'No container runtime found. Install Docker: https://docs.docker.com/get-docker/',
+      );
     }
   }
 }
@@ -181,7 +173,6 @@ export function buildVolumeMounts(
     });
 
     // Global memory directory (read-only for non-main)
-    // Apple Container only supports directory mounts, not file mounts
     const globalDir = path.join(GROUPS_DIR, 'global');
     if (fs.existsSync(globalDir)) {
       mounts.push({

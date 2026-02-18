@@ -2,8 +2,7 @@
  * Hydra Configuration Module
  *
  * This module provides configuration for the Hydra agent platform.
- * It loads from hydra.yaml (unified config) if available, falling back
- * to legacy configuration sources (env vars, JSON files) for backward compatibility.
+ * It loads from hydra.yaml (unified config) if available.
  */
 
 import fs from 'fs';
@@ -110,47 +109,22 @@ export function getTriggerPattern(botName: string): RegExp {
 }
 
 /**
- * Load bot registry from hydra.yaml, data/bots.json, or env vars.
- * Returns empty registry if no bots configured (web-console-only mode).
+ * Load bot registry from hydra.yaml.
+ * Returns empty registry if no bots configured (exec-only mode).
  */
 export function loadBotRegistry(): BotRegistry {
-  // If unified config is loaded, use that (even if empty - allows web-console-only mode)
   if (usingUnifiedConfig && hydraConfig) {
     if (Object.keys(hydraConfig.bots).length > 0) {
       const registry = toLegacyBotRegistry(hydraConfig);
       logger.debug({ bots: Object.keys(registry) }, 'Bot registry loaded from hydra config');
       return registry;
     }
-    // Empty bots in hydra.yaml = web-console-only mode
-    logger.info('No bots configured in hydra.yaml - running in web-console-only mode');
+    logger.info('No bots configured in hydra.yaml — exec-only mode (no Telegram bots will start)');
     return {};
   }
 
-  // Fall back to legacy: data/bots.json
-  const botsPath = path.join(DATA_DIR, 'bots.json');
-  if (fs.existsSync(botsPath)) {
-    return JSON.parse(fs.readFileSync(botsPath, 'utf-8')) as BotRegistry;
-  }
-
-  // Fall back to legacy: env vars
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) {
-    // No bots configured anywhere - this is fine for web-console-only mode
-    logger.info('No bot configuration found - running in web-console-only mode');
-    return {};
-  }
-
-  const name = process.env.ASSISTANT_NAME || 'Andy';
-  const key = name.toLowerCase();
-  const registry: BotRegistry = {
-    [key]: { token, name },
-  };
-
-  // Persist so future starts use bots.json
-  fs.mkdirSync(path.dirname(botsPath), { recursive: true });
-  fs.writeFileSync(botsPath, JSON.stringify(registry, null, 2));
-
-  return registry;
+  logger.info('No hydra.yaml found — no bots configured');
+  return {};
 }
 
 /**

@@ -8,13 +8,11 @@ cd "$SCRIPT_DIR"
 
 IMAGE_NAME="hydra-agent"
 
-# Auto-detect container runtime
+# Verify Docker is available
 if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
     RUNTIME="docker"
-elif command -v container &>/dev/null; then
-    RUNTIME="container"
 else
-    echo "Error: No container runtime found. Install Docker or Apple Container."
+    echo "Error: Docker is not available. Install Docker: https://docs.docker.com/get-docker/"
     exit 1
 fi
 

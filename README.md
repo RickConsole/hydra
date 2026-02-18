@@ -300,7 +300,6 @@ Container secrets go in `~/.config/hydra/secrets.env`. Host-side config (bot tok
 |----------|-------|-------------|
 | `ANTHROPIC_API_KEY` | `secrets.env` | API key for Claude (injected into all containers) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `secrets.env` | OAuth token from Claude Code (auto-managed) |
-| `TELEGRAM_BOT_TOKEN` | `.env` / shell | Bot token from @BotFather (host-side only) |
 | `QDRANT_URL` | `secrets.env` | Qdrant vector DB URL (default: `http://localhost:6333`) |
 | `OLLAMA_URL` | `secrets.env` | Ollama embedding server URL (default: `http://localhost:11434`) |
 

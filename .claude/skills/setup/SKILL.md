@@ -405,55 +405,6 @@ Verify:
 systemctl --user status hydra
 ```
 
-#### macOS (launchd)
-
-```bash
-NODE_PATH=$(which node)
-PROJECT_PATH=$(pwd)
-HOME_PATH=$HOME
-
-mkdir -p ~/Library/LaunchAgents logs
-cat > ~/Library/LaunchAgents/com.hydra.plist << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.hydra</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>${NODE_PATH}</string>
-        <string>${PROJECT_PATH}/dist/index.js</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>${PROJECT_PATH}</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:${HOME_PATH}/.local/bin</string>
-        <key>HOME</key>
-        <string>${HOME_PATH}</string>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>${PROJECT_PATH}/logs/hydra.log</string>
-    <key>StandardErrorPath</key>
-    <string>${PROJECT_PATH}/logs/hydra.error.log</string>
-</dict>
-</plist>
-EOF
-
-launchctl load ~/Library/LaunchAgents/com.hydra.plist
-```
-
-Verify:
-```bash
-launchctl list | grep hydra
-```
-
 ---
 
 ## Troubleshooting
@@ -475,8 +426,7 @@ launchctl list | grep hydra
 **Orchestrator not starting:**
 - Debug mode: `hydra up --foreground`
 - Check logs: `hydra logs`
-- Linux: `journalctl --user -u hydra -f`
-- macOS: `cat logs/hydra.error.log`
+- Check logs: `journalctl --user -u hydra -f`
 
 **Telegram bot not responding:**
 - Verify trigger matches (must start with `@BotName`)

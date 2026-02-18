@@ -907,45 +907,22 @@ function ensureContainerSystemRunning(): void {
     // Docker not available or not running
   }
 
-  try {
-    execSync('container system status', { stdio: 'pipe' });
-    logger.debug('Apple Container system already running');
-    return;
-  } catch {
-    // Apple Container not running, try to start it
-  }
-
-  try {
-    logger.info('Starting Apple Container system...');
-    execSync('container system start', { stdio: 'pipe', timeout: 30000 });
-    logger.info('Apple Container system started');
-    return;
-  } catch {
-    // Apple Container not available
-  }
-
   console.error(
     '\n╔════════════════════════════════════════════════════════════════╗',
   );
   console.error(
-    '║  FATAL: No container runtime available                         ║',
+    '║  FATAL: Docker is not available                                ║',
   );
   console.error(
     '║                                                                ║',
   );
   console.error(
-    '║  Install one of:                                              ║',
-  );
-  console.error(
-    '║  - Docker: https://docs.docker.com/get-docker/                ║',
-  );
-  console.error(
-    '║  - Apple Container: https://github.com/apple/container        ║',
+    '║  Install Docker: https://docs.docker.com/get-docker/          ║',
   );
   console.error(
     '╚════════════════════════════════════════════════════════════════╝\n',
   );
-  throw new Error('No container runtime available');
+  throw new Error('Docker is not available');
 }
 
 async function main(): Promise<void> {

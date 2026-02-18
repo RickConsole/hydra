@@ -355,12 +355,12 @@ export function getBotByKey(config: HydraConfig, key: string): BotConfig | undef
 
 /**
  * Build JID from agent config
- * For web-console-only agents (no bot), uses "web:console:{folder}"
+ * For exec-only agents (no bot/chat_id), uses "exec:local:{folder}"
  */
 export function buildJidFromAgent(agent: AgentConfig): string {
   if (!agent.bot || !agent.chat_id) {
-    // Web-console-only agent
-    return `web:console:${agent.folder}`;
+    // Exec-only agent (no Telegram bot attached)
+    return `exec:local:${agent.folder}`;
   }
   return `telegram:${agent.bot}:${agent.chat_id}`;
 }
