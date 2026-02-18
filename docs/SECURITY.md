@@ -21,24 +21,47 @@ Agents execute in Docker containers, providing:
 
 This is the primary security boundary. Rather than relying on application-level permission checks, the attack surface is limited by what's mounted.
 
-### 2. Mount Security
+### 2. Mount Security (Two-File Model)
 
-**External Allowlist** - Mount permissions stored at `~/.config/hydra/mount-allowlist.json`, which is:
-- Outside project root
-- Never mounted into containers
-- Cannot be modified by agents
+Mount access is controlled by **two independent config files** that must both agree:
 
-**Default Blocked Patterns:**
+| File | Location | Purpose | Editable by agent? |
+|------|----------|---------|-------------------|
+| `hydra.yaml` | Project root | Declares what an agent *wants* mounted | Yes (if project root is mounted rw) |
+| `mount-allowlist.json` | `~/.config/hydra/` | Declares what's *allowed* to be mounted | No (never mounted into containers) |
+
+**Why two files?** Defense in depth. An agent that gains write access to `hydra.yaml` could add mount entries for sensitive directories. The external allowlist prevents this — it's the runtime enforcement layer that the agent can never reach.
+
+**If the allowlist file doesn't exist, all additional mounts are blocked.** This is a fail-closed design.
+
+**External Allowlist Format** (`~/.config/hydra/mount-allowlist.json`):
+```json
+{
+  "allowedRoots": [
+    { "path": "~/src", "allowReadWrite": true, "description": "Source code" }
+  ],
+  "blockedPatterns": [".ssh", ".gnupg", "credentials"],
+  "nonMainReadOnly": true
+}
 ```
-.ssh, .gnupg, .aws, .azure, .gcloud, .kube, .docker,
-credentials, .env, .netrc, .npmrc, id_rsa, id_ed25519,
+
+**Validation flow** (in `mount-security.ts`):
+1. Expand and resolve the host path (including symlinks)
+2. Check against blocked patterns — reject if matched
+3. Check if the resolved path falls under an `allowedRoot` — reject if not
+4. Apply read-only enforcement (per-root `allowReadWrite`, global `nonMainReadOnly`)
+
+**Default Blocked Patterns** (always merged with user-defined patterns):
+```
+.ssh, .gnupg, .gpg, .aws, .azure, .gcloud, .kube, .docker,
+credentials, .env, .netrc, .npmrc, .pypirc, id_rsa, id_ed25519,
 private_key, .secret
 ```
 
-**Protections:**
-- Symlink resolution before validation (prevents traversal attacks)
-- Container path validation (rejects `..` and absolute paths)
-- `nonMainReadOnly` option forces read-only for non-main groups
+**Additional Protections:**
+- Symlink resolution before validation (prevents traversal via symlinked paths)
+- Container path validation (rejects `..` and absolute paths — mounts land under `/workspace/extra/`)
+- `nonMainReadOnly` forces read-only for non-main agents even if the root allows read-write
 
 ### 3. Session Isolation
 

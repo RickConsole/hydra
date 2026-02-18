@@ -1,198 +1,360 @@
 ---
 name: setup
-description: Run initial Hydra setup. Use when user wants to install dependencies, configure channels (Telegram, CLI), or start the background services. Triggers on "setup", "install", "configure hydra", or first-time setup requests.
+description: Run initial Hydra setup. Use when user wants to install dependencies, create hydra.yaml, configure agents, or start services. Triggers on "setup", "install", "configure hydra", "create agent", or first-time setup requests.
 ---
 
 # Hydra Setup
 
-Run all commands automatically. Only pause when user action is required.
+Run all commands automatically. Only pause when user action is required (pasting tokens, choosing options).
 
-**UX Note:** When asking the user questions, prefer using the `AskUserQuestion` tool instead of just outputting text.
+**UX Note:** When asking the user questions, prefer using the `AskUserQuestion` tool instead of just outputting text. This integrates with Claude's built-in question/answer system for a better experience.
 
-## 1. Install Dependencies
+**Resume awareness:** Before starting, check what's already done:
+- `hydra.yaml` exists? Skip config creation or offer to modify it.
+- `.env` exists with keys? Skip auth setup.
+- `docker images | grep hydra-agent` returns results? Skip container build.
+- `agents/` has folders? Skip agent creation or offer to add more.
+
+---
+
+## 1. Install Dependencies & Build
 
 ```bash
-npm install
-npm run build
-npm link
+npm install && npm run build && npm link
 ```
 
-The `npm link` step makes the `hydra` CLI command available globally.
-
-Verify:
+Verify the CLI is available:
 ```bash
 hydra --help
 ```
 
-## 2. Configure Claude Authentication
+If `hydra --help` fails, the `npm link` may need `sudo` or the user's npm prefix is misconfigured. Suggest:
+```bash
+sudo npm link
+```
+
+## 2. Configure Authentication
+
+Check if `.env` already exists:
+```bash
+[ -f .env ] && cat .env | grep -E "^(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)=" | sed 's/=.*/=***/' || echo "No .env file found"
+```
+
+If already configured, confirm with the user and skip ahead.
 
 Ask the user:
-> Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
+> How do you want to authenticate with Claude?
 
-### Option 1: Claude Subscription (Recommended)
+Options:
+1. **Claude subscription** (Pro/Max) - uses OAuth token
+2. **Anthropic API key** - uses API key directly
+
+### Option 1: Claude Subscription
 
 Tell the user:
-> Open another terminal window and run:
+> Open another terminal and run:
 > ```
 > claude setup-token
 > ```
-> A browser window will open for you to log in. Once authenticated, the token will be displayed in your terminal. Either:
-> 1. Paste it here and I'll add it to `.env` for you, or
-> 2. Add it to `.env` yourself as `CLAUDE_CODE_OAUTH_TOKEN=<your-token>`
+> A browser window will open. Once authenticated, paste the token here.
 
-If they give you the token, add it to `.env`:
-
+When they provide the token, write it to `.env`:
 ```bash
-echo "CLAUDE_CODE_OAUTH_TOKEN=<token>" > .env
+echo "CLAUDE_CODE_OAUTH_TOKEN=<token>" >> .env
 ```
 
 ### Option 2: API Key
 
-Ask if they have an existing key to copy or need to create one.
+Ask if they have an existing key or need to create one at https://console.anthropic.com/
 
-**Copy existing:**
 ```bash
-grep "^ANTHROPIC_API_KEY=" /path/to/source/.env > .env
+echo "ANTHROPIC_API_KEY=<key>" >> .env
 ```
 
-**Create new:**
+Verify:
 ```bash
-echo 'ANTHROPIC_API_KEY=' > .env
-```
-
-Tell the user to add their key from https://console.anthropic.com/
-
-**Verify:**
-```bash
-KEY=$(grep "^ANTHROPIC_API_KEY=" .env | cut -d= -f2)
-[ -n "$KEY" ] && echo "API key configured: ${KEY:0:10}...${KEY: -4}" || echo "Missing"
+grep -E "^(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)=" .env | sed 's/=.\{10\}/=***/;s/\(.\{20\}\).*/\1.../' && echo "Auth configured"
 ```
 
 ## 3. Build Container Image
 
-Check that Docker is installed and running:
-
+Check Docker is running:
 ```bash
-docker info >/dev/null 2>&1 && echo "Docker is running" || echo "Docker is NOT running - please install and start Docker first"
+docker info >/dev/null 2>&1 && echo "Docker is running" || echo "ERROR: Docker is not running. Install and start Docker first."
 ```
 
-If Docker is not available, tell the user to install it before continuing.
+If Docker is not available, **stop and tell the user to install Docker before continuing.**
 
-Build the Hydra agent container:
-
+Build:
 ```bash
 ./container/build.sh
 ```
 
-This creates the `hydra-agent:latest` image with Node.js, Chromium, Claude Code CLI, and agent-browser.
-
 Verify:
 ```bash
-echo '{}' | docker run -i --rm --entrypoint /bin/echo hydra-agent:latest "Container OK" || echo "Container build failed"
+docker images | grep hydra-agent
 ```
 
-## 4. Create Your First Agent
+## 4. Create hydra.yaml
 
-```bash
-hydra agent create
-```
+This is the core configuration step. The config file controls everything: agents, bots, security, and memory.
 
-This will interactively ask for an agent name and folder. For a first-time setup, suggest:
-- **Name:** Main Assistant
-- **Folder:** main
+**If `hydra.yaml` already exists**, ask:
+> You already have a hydra.yaml. Do you want to:
+> 1. Keep it and skip to agent creation
+> 2. Start fresh with a new config
+> 3. Review and modify the existing config
 
-The command creates `agents/{folder}/CLAUDE.md` and adds the agent to `hydra.yaml`.
+**If starting fresh**, build the config interactively by collecting answers first, then writing the file in one shot.
 
-## 5. Test with Interactive CLI
+### 4a. Collect Configuration
 
-Start an interactive Claude Code session inside the agent's container:
+Ask these questions in order, using `AskUserQuestion` for each:
 
-```bash
-hydra exec main
-```
+**Project name:**
+> What do you want to name this Hydra instance? (e.g., "my-setup", "home-lab")
+> This is just for identification.
 
-This drops you into a live Claude Code session with the agent's isolated workspace mounted. Type a message to verify everything works, then exit with `/exit` or Ctrl+C.
+**Telegram integration:**
+> Do you want to connect agents to Telegram?
+> This lets you message agents from your phone. You can always add this later.
 
-**If this works, basic setup is complete.** The sections below are optional enhancements.
+If **yes**:
+> Do you already have a Telegram bot token, or need to create one?
 
----
-
-## Optional: Telegram Integration
-
-Ask the user:
-> Do you want to connect agents to Telegram? This lets you message agents from your phone.
-
-If **no**, skip to the next optional section.
-
-### 6a. Create a Telegram Bot
-
-Ask the user:
-> Do you already have a Telegram bot token, or do you need to create one?
-
-**Create new:**
-
-Tell the user:
+If they need to create one, tell them:
 > 1. Open Telegram and message @BotFather
 > 2. Send `/newbot` and follow the prompts
 > 3. Copy the bot token (looks like `123456:ABC-DEF...`)
 > 4. Paste it here
 
-**Use existing:** Ask them to paste the token.
-
-Once you have the token, add it to `.env`:
-
+Add token to `.env`:
 ```bash
 echo "TELEGRAM_BOT_TOKEN=<token>" >> .env
 ```
 
-### 6b. Update hydra.yaml
+Ask:
+> What name does the bot use? (This becomes the trigger word, e.g., "@Anton")
 
-Ask the user:
-> What name should your bot use in Telegram?
+**External directory access:**
+> Do you want agents to access directories **outside** the Hydra project?
 >
-> Default: `Hydra`
+> Examples: Git repos (`~/src`), project folders, documents.
+> Without this, agents can only access their own agent folder.
 
-Add the bot and update the agent config in `hydra.yaml`:
+If **yes**:
+> Which directories? List parent folders (e.g., `~/src`) or specific paths.
+
+For each directory:
+> Should `[directory]` be **read-write** or **read-only**?
+
+> Should non-main agents be restricted to **read-only** even for read-write directories? (Recommended: yes)
+
+**IMPORTANT: Two files control mount access.** Both must be configured:
+1. `hydra.yaml` `security:` section — defines the policy in the project config
+2. `~/.config/hydra/mount-allowlist.json` — external allowlist read at runtime by the mount security module
+
+If the allowlist file doesn't exist, **ALL additional mounts are blocked** regardless of what's in hydra.yaml. The allowlist lives outside the project so agents can't tamper with it.
+
+Store the user's answers — you'll use them to write both files.
+
+**Long-term memory:**
+> Do you want to set up long-term memory for agents?
+>
+> 1. **Skip** - no persistent memory across sessions
+> 2. **mem0 Cloud** - hosted service (requires API key from mem0.ai)
+> 3. **Self-hosted** - Qdrant + Ollama via Docker Compose (started by `hydra up`)
+
+If **mem0 Cloud**: add key to `.env`:
+```bash
+echo "MEM0_API_KEY=<key>" >> .env
+```
+
+### 4b. Write the Config File
+
+Assemble `hydra.yaml` based on collected answers. **Do NOT include an `agents:` section** — agents will be added by `hydra agent create` in the next step.
+
+**Rules:**
+- Omit entire sections that aren't needed (no empty `bots:`, `memory:`, or `security:`)
+- Use `env:VAR_NAME` syntax for secrets — never inline tokens
+- Always include `version: "1"` and `runtime:` with defaults
+
+**Template (include only relevant sections):**
 
 ```yaml
+version: "1"
+project: <PROJECT_NAME>
+
+# Only include if user wants Telegram
 bots:
-  main:
-    name: <ASSISTANT_NAME>
+  <bot_key>:
+    name: <BotName>
     token: env:TELEGRAM_BOT_TOKEN
     platform: telegram
 
-agents:
-  - name: Main Assistant
-    folder: main
-    trigger: "@<ASSISTANT_NAME>"
-    bot: main
-    chat_id: ""  # Will be populated when you message the bot
+# Only include if user wants external directory access
+security:
+  mounts:
+    allowed_roots:
+      - path: <~/path>
+        allow_read_write: <true|false>
+        description: <what this is>
+    blocked_patterns:
+      - .ssh
+      - .gnupg
+      - .aws
+      - credentials
+    non_main_readonly: true
+
+# Only include if user chose mem0
+memory:
+  provider: mem0
+  self_hosted: false          # true for self-hosted
+  api_key: env:MEM0_API_KEY   # omit for self-hosted
+  # For self-hosted, include instead:
+  # qdrant_url: http://localhost:6333
+  # ollama_url: http://localhost:11434
+
+# Always include
+runtime:
+  log_level: info
 ```
 
-Replace `<ASSISTANT_NAME>` with their choice.
+Write the assembled config using the Write tool (not bash heredoc — YAML indentation is fragile).
+
+### 4c. Create Mount Allowlist (if external dirs configured)
+
+If the user configured external directory access, create the runtime allowlist file. **This file must exist or all mounts will be rejected.**
+
+```bash
+mkdir -p ~/.config/hydra
+```
+
+Write `~/.config/hydra/mount-allowlist.json` using the Write tool. The format uses camelCase (different from hydra.yaml's snake_case):
+
+```json
+{
+  "allowedRoots": [
+    {
+      "path": "~/src",
+      "allowReadWrite": true,
+      "description": "Source code repositories"
+    }
+  ],
+  "blockedPatterns": [
+    ".ssh", ".gnupg", ".aws", "credentials", ".env",
+    ".netrc", ".npmrc", "id_rsa", "id_ed25519", "private_key", ".secret"
+  ],
+  "nonMainReadOnly": true
+}
+```
+
+**Rules for the allowlist file:**
+- `allowedRoots` entries must cover every `host_path` used in agent mounts. A mount at `~/src/myproject` requires a root at `~/src` or `~/src/myproject`.
+- `blockedPatterns` are always merged with built-in defaults (`.ssh`, `.gnupg`, etc.) but it's good practice to list them explicitly.
+- `nonMainReadOnly: true` forces non-main agents to read-only even if `allowReadWrite` is true on the root.
+- The `security:` section in `hydra.yaml` and this file should define the **same roots** — hydra.yaml is for config validation, this file is for runtime enforcement.
+
+If the user does NOT want external directory access, still create an empty allowlist so the system doesn't log warnings:
+
+```bash
+mkdir -p ~/.config/hydra
+```
+
+```json
+{
+  "allowedRoots": [],
+  "blockedPatterns": [],
+  "nonMainReadOnly": true
+}
+```
+
+### 4d. Validate
+
+```bash
+hydra config validate
+```
+
+If validation fails, read the error and fix the config. Common issues:
+- Bot referenced in agent doesn't exist in `bots:` section
+- Duplicate agent folders
+- Invalid folder names (must be `^[a-z0-9_-]+$`)
+- Missing `version: "1"`
+
+## 5. Create Agents
+
+Now create agents. `hydra agent create` does two things: creates the `agents/<folder>/CLAUDE.md` persona file AND appends the agent entry to `hydra.yaml`.
+
+Ask:
+> What should your first agent be called?
+>
+> **Name:** Display name (e.g., "Main Assistant", "Dev Helper")
+> **Folder:** Short lowercase identifier (e.g., "main", "dev")
+
+Folder must match `^[a-z0-9_-]+$`.
+
+```bash
+hydra agent create --name "<AGENT_NAME>" --folder <AGENT_FOLDER>
+```
+
+If the user set up Telegram in step 4, you need to **manually edit hydra.yaml** to add `trigger`, `bot`, and `chat_id` to the agent entry that `hydra agent create` just appended. The command only adds `name` and `folder`.
+
+Read the current `hydra.yaml`, find the agent entry, and update it:
+
+```yaml
+agents:
+  - name: <AGENT_NAME>
+    folder: <AGENT_FOLDER>
+    trigger: "@<BotName>"     # Add this
+    bot: <bot_key>            # Add this
+    chat_id: ""               # Add this — auto-populated when user messages the bot
+```
+
+If the user configured external mounts for this agent, also add the `container:` block:
+
+```yaml
+    container:
+      image: hydra-agent:latest
+      mounts:
+        - host_path: <~/path>
+          container_path: <name>
+          readonly: false
+```
+
+After creation, tell the user:
+> Edit `agents/<FOLDER>/CLAUDE.md` to customize the agent's persona.
+
+Ask:
+> Do you want to create another agent?
+
+Repeat for each additional agent. Validate after all agents are added:
+
+```bash
+hydra config validate
+```
+
+## 6. Test with Interactive CLI
+
+```bash
+hydra exec <AGENT_FOLDER>
+```
 
 Tell the user:
-> After starting the orchestrator (`hydra up`), message your bot in Telegram. The chat ID will be captured automatically.
+> This drops you into a live Claude Code session inside the agent's container.
+> Type a message to test. Exit with `/exit` or Ctrl+C.
+
+**If this works, core setup is complete.** Everything below is optional.
 
 ---
 
 ## Optional: Background Orchestrator
 
-The orchestrator (`hydra up`) runs in the background and enables:
-- Telegram bot listener (receives messages when you're not in a CLI session)
-- Task scheduler (cron, interval, one-time tasks)
-- IPC message routing
-- REST API + WebSocket for the web console
+The orchestrator enables Telegram message listening, task scheduling, and IPC routing. Without it, agents are only available via `hydra exec`.
 
-Ask the user:
-> Do you want to set up the background orchestrator?
-
-If **no**, skip ahead. They can always run `hydra up` later.
-
-### 7a. Start the Orchestrator
+Ask:
+> Do you want to start the background orchestrator?
 
 ```bash
-npm run build
 hydra up
 ```
 
@@ -201,17 +363,19 @@ Verify:
 hydra status
 ```
 
-### 7b. System Service (Auto-Start on Boot)
-
-Ask the user:
-> Do you want Hydra to start automatically on boot?
-
-If **no**, they can start manually with `hydra up`.
-
-Detect the platform:
-
+To stop:
 ```bash
-echo "Platform: $(uname -s)"
+hydra down
+```
+
+### Auto-Start on Boot
+
+Ask:
+> Want Hydra to start automatically on boot?
+
+Detect platform:
+```bash
+uname -s
 ```
 
 #### Linux (systemd)
@@ -299,78 +463,30 @@ launchctl list | grep hydra
 
 ---
 
-## Optional: Mount Allowlist
-
-Ask the user:
-> Do you want agents to access any directories **outside** the Hydra project?
->
-> Examples: Git repositories, project folders, documents you want Claude to work on.
->
-> **Note:** Without this, agents can only access their own agent folders.
-
-If **no**, create an empty allowlist:
-
-```bash
-mkdir -p ~/.config/hydra
-cat > ~/.config/hydra/mount-allowlist.json << 'EOF'
-{
-  "allowedRoots": [],
-  "blockedPatterns": [],
-  "nonMainReadOnly": true
-}
-EOF
-echo "Mount allowlist created - no external directories allowed"
-```
-
-If **yes**, ask:
-> Which directories do you want to allow access to?
->
-> You can specify:
-> - A parent folder like `~/projects` (allows access to anything inside)
-> - Specific paths like `~/repos/my-app`
->
-> List them one per line, or give me a comma-separated list.
-
-For each directory, ask:
-> Should `[directory]` be **read-write** (agents can modify files) or **read-only**?
-
-Create the allowlist:
-
-```bash
-mkdir -p ~/.config/hydra
-cat > ~/.config/hydra/mount-allowlist.json << 'EOF'
-{
-  "allowedRoots": [
-    {
-      "path": "~/projects",
-      "allowReadWrite": true,
-      "description": "Development projects"
-    }
-  ],
-  "blockedPatterns": [],
-  "nonMainReadOnly": true
-}
-EOF
-```
-
----
-
 ## Troubleshooting
 
-**Container agent fails:**
-- Ensure Docker is running: `docker info`
-- Check container logs: `cat agents/main/logs/container-*.log | tail -50`
+**`hydra exec` fails or hangs:**
+- Verify image exists: `docker images | grep hydra-agent`
+- Rebuild: `./container/build.sh`
+- Check Docker is running: `docker info`
 
-**`hydra exec` hangs or errors:**
-- Verify the container image exists: `docker images | grep hydra-agent`
-- Rebuild if needed: `./container/build.sh`
+**Container agent errors:**
+- Check logs: `cat agents/<folder>/logs/container-*.log | tail -50`
+- Run with verbose output: `hydra exec <folder> --verbose`
+
+**Config validation fails:**
+- Run `hydra config validate` and read the error carefully
+- Check YAML syntax (indentation matters!)
+- Ensure all `env:VAR_NAME` references exist in `.env`
 
 **Orchestrator not starting:**
-- Linux: `journalctl --user -u hydra -f`
-- macOS: Check `logs/hydra.error.log`
-- Manual start: `hydra up --foreground` to see errors directly
-
-**No response to Telegram messages:**
-- Verify trigger pattern matches (e.g., `@BotName` at start of message)
-- Check `hydra status` to confirm orchestrator is running
+- Debug mode: `hydra up --foreground`
 - Check logs: `hydra logs`
+- Linux: `journalctl --user -u hydra -f`
+- macOS: `cat logs/hydra.error.log`
+
+**Telegram bot not responding:**
+- Verify trigger matches (must start with `@BotName`)
+- Confirm orchestrator is running: `hydra status`
+- Check `chat_id` is populated in `hydra.yaml` (send a message to the bot first)
+- Check logs: `hydra logs | grep telegram`

@@ -185,9 +185,27 @@ TELEGRAM_BOT_TOKEN=123456:ABC...
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Mount Security
+### Mount Security (Two-File Model)
 
-The mount allowlist lives separately at `~/.config/hydra/mount-allowlist.json` -- outside the container's reach. Even if an agent modifies `hydra.yaml`, it can't add mounts that aren't pre-approved.
+Mounts require approval from **two** independent config files:
+
+1. **`hydra.yaml`** — declares what an agent *wants* mounted (lives in the project)
+2. **`~/.config/hydra/mount-allowlist.json`** — declares what's *allowed* to be mounted (lives outside the project)
+
+Both must agree for a mount to work. This is intentional: even if an agent modifies `hydra.yaml`, it can't grant itself access to paths that aren't pre-approved in the external allowlist. The allowlist is never mounted into containers and can't be reached by agents.
+
+```json
+// ~/.config/hydra/mount-allowlist.json
+{
+  "allowedRoots": [
+    { "path": "~/src", "allowReadWrite": true, "description": "Source code" }
+  ],
+  "blockedPatterns": [".ssh", ".gnupg", ".aws", "credentials"],
+  "nonMainReadOnly": true
+}
+```
+
+If the allowlist file doesn't exist, **all additional mounts are blocked** by default.
 
 ## Supported Channels
 
