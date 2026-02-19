@@ -161,14 +161,14 @@ export function buildVolumeMounts(
     // Main also gets its group folder as the working directory
     mounts.push({
       hostPath: path.join(GROUPS_DIR, group.folder),
-      containerPath: '/workspace/group',
+      containerPath: '/workspace/agent',
       readonly: false,
     });
   } else {
     // Other groups only get their own folder
     mounts.push({
       hostPath: path.join(GROUPS_DIR, group.folder),
-      containerPath: '/workspace/group',
+      containerPath: '/workspace/agent',
       readonly: false,
     });
 

@@ -23,6 +23,7 @@ const commands: Record<string, () => Promise<CommandModule>> = {
   agents:   () => import('./commands/agents.js') as Promise<CommandModule>,
   tasks:    () => import('./commands/tasks.js') as Promise<CommandModule>,
   logs:     () => import('./commands/logs.js') as Promise<CommandModule>,
+  update:   () => import('./commands/update.js') as Promise<CommandModule>,
 };
 
 // Compound commands: "agent create", "config validate"
@@ -47,6 +48,7 @@ function printUsage(): void {
   console.log(`  ${bold('agent create')}             Create a new agent`);
   console.log(`  ${bold('tasks')}                    List scheduled tasks`);
   console.log(`  ${bold('logs')} [agent]             Tail orchestrator or agent logs`);
+  console.log(`  ${bold('update')} [--full]           Rebuild containers (update Claude Code)`);
   console.log(`  ${bold('config validate')}          Validate hydra.yaml`);
   console.log();
 }

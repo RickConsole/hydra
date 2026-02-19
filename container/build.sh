@@ -7,6 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 IMAGE_NAME="hydra-agent"
+FULL_REBUILD=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --full|-f) FULL_REBUILD=true ;;
+    esac
+done
 
 # Verify Docker is available
 if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
@@ -23,7 +30,11 @@ echo ""
 echo "=========================================="
 echo "Building base image: ${IMAGE_NAME}:latest"
 echo "=========================================="
-${RUNTIME} build -t "${IMAGE_NAME}:latest" -f Dockerfile .
+BUILD_ARGS=(--build-arg "CACHEBUST_CLAUDE=$(date +%s)")
+if [ "$FULL_REBUILD" = true ]; then
+    BUILD_ARGS+=(--no-cache)
+fi
+${RUNTIME} build "${BUILD_ARGS[@]}" -t "${IMAGE_NAME}:latest" -f Dockerfile .
 
 # Build specialized image variants
 # Each Dockerfile.* creates a variant that extends the base image

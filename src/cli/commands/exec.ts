@@ -139,6 +139,7 @@ export async function run(args: string[]): Promise<void> {
   const envVars: Record<string, string> = {
     ...resolveContainerSecrets(agent.container?.secrets ?? []),
     HYDRA_AGENT_FOLDER: agent.folder,
+    HYDRA_AGENT_NAME: agent.name,
     HYDRA_CHAT_JID: `cli:local:${agent.folder}`,
     HYDRA_IS_MAIN: String(isMain),
   };

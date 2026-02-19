@@ -9,17 +9,31 @@ fi
 # Configure claude-pulse status line + slash commands
 mkdir -p "$HOME/.claude/commands"
 cp /opt/claude-pulse/commands/*.md "$HOME/.claude/commands/" 2>/dev/null || true
+
+# Create status line wrapper that prepends agent name to claude-pulse output
+cat > /tmp/hydra-status.sh << 'STATUSEOF'
+#!/bin/bash
+pulse_output=$(python3 /opt/claude-pulse/claude_status.py 2>/dev/null)
+agent="${HYDRA_AGENT_NAME:-$HYDRA_AGENT_FOLDER}"
+if [ -n "$pulse_output" ]; then
+  echo "$agent | $pulse_output"
+else
+  echo "$agent"
+fi
+STATUSEOF
+chmod +x /tmp/hydra-status.sh
+
 SETTINGS_FILE="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS_FILE" ]; then
   # Merge statusLine into existing settings
-  jq '. + {"statusLine": {"type": "command", "command": "python3 /opt/claude-pulse/claude_status.py", "refresh": 150}}' \
+  jq '. + {"statusLine": {"type": "command", "command": "bash /tmp/hydra-status.sh", "refresh": 150}}' \
     "$SETTINGS_FILE" > /tmp/settings-merged.json && mv /tmp/settings-merged.json "$SETTINGS_FILE"
 else
   cat > "$SETTINGS_FILE" << 'SETTINGS'
 {
   "statusLine": {
     "type": "command",
-    "command": "python3 /opt/claude-pulse/claude_status.py",
+    "command": "bash /tmp/hydra-status.sh",
     "refresh": 150
   }
 }

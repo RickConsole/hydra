@@ -52,11 +52,6 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 # Install agent-browser globally
 RUN npm install -g agent-browser
 
-# Install Claude Code natively (not via npm)
-ENV HOME=/home/node
-RUN curl -fsSL https://claude.ai/install.sh | bash
-ENV PATH="/home/node/.local/bin:$PATH"
-
 # Install claude-pulse (status line for Claude Code CLI)
 RUN git clone --depth 1 https://github.com/NoobyGains/claude-pulse.git /opt/claude-pulse
 
@@ -76,7 +71,7 @@ COPY agent-runner/ ./
 RUN npm run build
 
 # Create workspace directories
-RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks
+RUN mkdir -p /workspace/agent /workspace/global /workspace/extra /workspace/ipc/messages /workspace/ipc/tasks
 
 # Create entrypoint script
 # Env vars are injected via Docker -e flags from secrets.env
@@ -86,6 +81,13 @@ RUN printf '#!/bin/bash\nset -e\ncat > /tmp/input.json\nnode /app/dist/index.js 
 COPY cli-entrypoint.sh /app/cli-entrypoint.sh
 RUN chmod +x /app/cli-entrypoint.sh
 
+# Install Claude Code natively — placed late so rebuilds are fast.
+# Pass --build-arg CACHEBUST_CLAUDE=$(date +%s) to force a fresh install.
+ENV HOME=/home/node
+ARG CACHEBUST_CLAUDE=0
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/home/node/.local/bin:$PATH"
+
 # Set ownership to node user (non-root) for writable directories
 RUN mkdir -p /home/node/.cache && chown -R node:node /workspace /home/node/.cache
 
@@ -93,7 +95,7 @@ RUN mkdir -p /home/node/.cache && chown -R node:node /workspace /home/node/.cach
 USER node
 
 # Set working directory to group workspace
-WORKDIR /workspace/group
+WORKDIR /workspace/agent
 
 # Entry point reads JSON from stdin, outputs JSON to stdout
 ENTRYPOINT ["/app/entrypoint.sh"]
