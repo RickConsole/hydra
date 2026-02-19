@@ -69,7 +69,6 @@ Most AI agent frameworks run everything in a single process with application-lev
    │  • Telegram bot listener                         │
    │  • Task scheduler (cron, interval, once)         │
    │  • IPC message routing                           │
-   │  • REST API + WebSocket (:3340)                  │
    └──────────────────────────────────────────────────┘
 ```
 
