@@ -10,6 +10,7 @@ export interface SpendLog {
   completion_tokens?: number;
   total_tokens?: number;
   response_cost?: number;
+  spend?: number;
   startTime?: string;
   endTime?: string;
 }
@@ -30,7 +31,7 @@ export async function fetchRecentLogs(
   try {
     const res = await fetch(`${baseUrl}/spend/logs?limit=${limit}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return [];
     const data = await res.json() as unknown;
@@ -47,7 +48,7 @@ export async function fetchKeyInfo(
   try {
     const res = await fetch(`${baseUrl}/key/info`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000),
     });
     return res.ok ? (await res.json() as KeyInfo) : null;
   } catch {
@@ -77,7 +78,7 @@ export async function printSessionSummary(
 
   const tokIn = sessionLogs.reduce((s, l) => s + (l.prompt_tokens ?? 0), 0);
   const tokOut = sessionLogs.reduce((s, l) => s + (l.completion_tokens ?? 0), 0);
-  const cost = sessionLogs.reduce((s, l) => s + (l.response_cost ?? 0), 0);
+  const cost = sessionLogs.reduce((s, l) => s + (l.spend ?? l.response_cost ?? 0), 0);
 
   const dim = '\x1b[2m';
   const reset = '\x1b[0m';

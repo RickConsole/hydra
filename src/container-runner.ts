@@ -355,9 +355,18 @@ export async function runContainerAgent(
   const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
   fs.mkdirSync(logsDir, { recursive: true });
 
-  // Sync shared credentials into this group's session before spawning
+  // Sync shared credentials into this group's session before spawning.
+  // Skip when LiteLLM is configured — the OAuth token in credentials causes
+  // Claude Code to authenticate directly with api.anthropic.com, bypassing the proxy.
   const groupSessionsDir = path.join(DATA_DIR, 'sessions', group.folder, '.claude');
-  copyCredentialsToGroup(groupSessionsDir);
+  const llm = group.llmConfig;
+  if (llm?.provider === 'litellm') {
+    // Remove stale credentials so Claude Code doesn't pick up the OAuth token
+    const credsDest = path.join(groupSessionsDir, '.credentials.json');
+    try { fs.unlinkSync(credsDest); } catch { /* not present */ }
+  } else {
+    copyCredentialsToGroup(groupSessionsDir);
+  }
 
   return new Promise((resolve) => {
     // Pass DOCKER_HOST to child process for docker-proxy support

@@ -303,7 +303,6 @@ async function main(): Promise<void> {
           'WebSearch', 'WebFetch',
           'mcp__hydra__*',
           ...(mem0Mcp ? ['mcp__mem0__*'] : []),
-          ...(process.env.PITHOS_URL ? ['mcp__pithos__*'] : []),
         ],
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
@@ -311,9 +310,6 @@ async function main(): Promise<void> {
         mcpServers: {
           hydra: ipcMcp,
           ...(mem0Mcp ? { mem0: mem0Mcp } : {}),
-          ...(process.env.PITHOS_URL ? {
-            pithos: { url: `${process.env.PITHOS_URL}/mcp` }
-          } : {}),
         },
         hooks: {
           PreCompact: [{ hooks: [createPreCompactHook()] }]
