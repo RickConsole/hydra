@@ -10,8 +10,7 @@ hydra-console/
 store/
 data/
 logs/
-groups/*/logs/
-groups/*/conversations/
+groups/*
 
 # Secrets
 *.keys.json

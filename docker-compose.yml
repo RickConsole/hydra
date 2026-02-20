@@ -119,6 +119,58 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # PostgreSQL - Spend tracking database for LiteLLM
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=litellm
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-litellm}
+      - POSTGRES_DB=litellm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hydra-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # LiteLLM Proxy - Unified API gateway for LLM providers
+  # Provides cost tracking, rate limiting, caching, and model routing.
+  # Orchestrator reaches it at http://litellm:4000
+  # Agent containers (bridge network) reach it via host.docker.internal:4000
+  # In hydra.yaml set: llm.provider: litellm / llm.base_url: http://localhost:4000
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    restart: unless-stopped
+    ports:
+      - "4000:4000"  # Exposed to host so agent containers can reach via host.docker.internal
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-hydra-local}
+      - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD:-litellm}@postgres:5432/litellm
+      - STORE_MODEL_IN_DB=True
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    networks:
+      - hydra-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health/liveliness"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
   # Hydra Orchestrator - Core service
   orchestrator:
     build:
@@ -218,4 +270,6 @@ volumes:
   qdrant_snapshots:
     driver: local
   ollama_data:
+    driver: local
+  postgres_data:
     driver: local

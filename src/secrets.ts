@@ -25,6 +25,7 @@ export const BASE_VARS = [
   'QDRANT_URL',
   'OLLAMA_URL',
   'OPENAI_API_KEY',
+  'LITELLM_API_KEY',
 ];
 
 let secretsCache: Record<string, string> | null = null;
