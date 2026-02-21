@@ -90,6 +90,12 @@ else
   echo "$SETTINGS_PATCH" | jq '.' > "$SETTINGS_FILE"
 fi
 
+# Remove stale apiKeyHelper when not using LiteLLM proxy — it conflicts with
+# CLAUDE_CODE_OAUTH_TOKEN which is loaded from the mounted credentials file.
+if [ -z "$ANTHROPIC_BASE_URL" ]; then
+  jq 'del(.apiKeyHelper)' "$SETTINGS_FILE" > /tmp/settings-clean.json && mv /tmp/settings-clean.json "$SETTINGS_FILE"
+fi
+
 # Build MCP config for Claude Code CLI
 # Start with hydra IPC server (always present)
 MCP_SERVERS=$(cat << HYDRA_MCP
