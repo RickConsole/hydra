@@ -54,7 +54,7 @@ const ContainerConfigSchema = z.object({
 const LlmProviderSchema = z.object({
   provider: z.enum(['anthropic', 'litellm']),
   base_url: z.string().optional().describe('Base URL for the LLM proxy (e.g., http://localhost:4000)'),
-  api_key: z.string().optional().describe('API key for the LLM provider (can be env:VAR_NAME reference)'),
+  api_key: z.string().optional().describe('API key — use secret:VAR_NAME to read from ~/.config/hydra/secrets.env, or env:VAR_NAME for environment variables'),
 });
 export type LlmProviderConfig = z.infer<typeof LlmProviderSchema>;
 

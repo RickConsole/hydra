@@ -88,6 +88,19 @@ export function clearSecretsCache(): void {
 }
 
 /**
+ * Resolve a `secret:VAR_NAME` reference from secrets.env.
+ * Plain values are returned as-is, so this is safe to call unconditionally.
+ *
+ * Example in hydra.yaml:
+ *   api_key: secret:LITELLM_API_KEY
+ */
+export function resolveSecretRef(value: string): string {
+  if (!value.startsWith('secret:')) return value;
+  const key = value.slice(7);
+  return loadSecrets()[key] ?? value;
+}
+
+/**
  * Resolve secrets for a container. Merges BASE_VARS with per-agent
  * declared secrets, looks up values from secrets.env, and returns
  * only keys that have values.

@@ -302,14 +302,14 @@ async function main(): Promise<void> {
           'Read', 'Write', 'Edit', 'Glob', 'Grep',
           'WebSearch', 'WebFetch',
           'mcp__hydra__*',
-          ...(mem0Mcp ? ['mcp__mem0__*'] : []),
+          ...(mem0Mcp ? ['mcp__mem0__*'] : [])
         ],
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         settingSources: ['project'],
         mcpServers: {
           hydra: ipcMcp,
-          ...(mem0Mcp ? { mem0: mem0Mcp } : {}),
+          ...(mem0Mcp ? { mem0: mem0Mcp } : {})
         },
         hooks: {
           PreCompact: [{ hooks: [createPreCompactHook()] }]

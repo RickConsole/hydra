@@ -16,7 +16,7 @@ import {
 } from './config.js';
 import { logger } from './logger.js';
 import { validateAdditionalMounts } from './mount-security.js';
-import { resolveContainerSecrets } from './secrets.js';
+import { resolveContainerSecrets, resolveSecretRef } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
@@ -256,7 +256,7 @@ export function resolveContainerEnvVars(
     delete envVars.CLAUDE_CODE_OAUTH_TOKEN;
   }
   if (llm?.api_key) {
-    envVars.ANTHROPIC_API_KEY = llm.api_key;
+    envVars.ANTHROPIC_API_KEY = resolveSecretRef(llm.api_key);
   }
 
   return envVars;
@@ -296,8 +296,14 @@ export function buildContainerArgs(
   }
 
   // Network mode
+  const networkMode = containerConfig?.networkMode ?? 'bridge';
   if (containerConfig?.networkMode) {
     args.push('--network', containerConfig.networkMode);
+  }
+  // On Linux, host.docker.internal is not injected automatically — add it explicitly.
+  // Not needed (and invalid) in host network mode where localhost is the host directly.
+  if (networkMode !== 'host') {
+    args.push('--add-host=host.docker.internal:host-gateway');
   }
 
   for (const mount of mounts) {
