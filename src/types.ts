@@ -42,12 +42,19 @@ export interface ContainerConfig {
   secrets?: string[];
 }
 
+export interface LlmConfig {
+  provider: 'anthropic' | 'litellm';
+  base_url?: string;
+  api_key?: string;
+}
+
 export interface RegisteredGroup {
   name: string;
   folder: string;
   trigger: string;
   added_at: string;
   containerConfig?: ContainerConfig;
+  llmConfig?: LlmConfig;
 }
 
 export interface Session {

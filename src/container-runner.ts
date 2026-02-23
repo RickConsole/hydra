@@ -16,7 +16,7 @@ import {
 } from './config.js';
 import { logger } from './logger.js';
 import { validateAdditionalMounts } from './mount-security.js';
-import { resolveContainerSecrets } from './secrets.js';
+import { resolveContainerSecrets, resolveSecretRef } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
@@ -223,11 +223,43 @@ export function buildVolumeMounts(
 }
 
 /**
- * Resolve env vars to inject into a container via -e flags.
- * Uses secrets.env as the source of truth.
+ * Rewrite localhost/127.0.0.1 URLs to host.docker.internal for bridge-mode containers.
  */
-export function resolveContainerEnvVars(group: RegisteredGroup): Record<string, string> {
-  return resolveContainerSecrets(group.containerConfig?.secrets ?? []);
+export function rewriteUrlForContainer(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      parsed.hostname = 'host.docker.internal';
+      return parsed.toString().replace(/\/$/, '');
+    }
+  } catch { /* not a URL, pass through */ }
+  return url;
+}
+
+/**
+ * Resolve env vars to inject into a container via -e flags.
+ * Uses secrets.env as the source of truth, and injects LiteLLM vars when configured.
+ */
+export function resolveContainerEnvVars(
+  group: RegisteredGroup,
+  networkMode?: 'bridge' | 'host' | 'none',
+): Record<string, string> {
+  const envVars = resolveContainerSecrets(group.containerConfig?.secrets ?? []);
+
+  const llm = group.llmConfig;
+  if (llm?.provider === 'litellm' && llm.base_url) {
+    const isHostMode = (networkMode ?? group.containerConfig?.networkMode ?? 'bridge') === 'host';
+    envVars.ANTHROPIC_BASE_URL = isHostMode ? llm.base_url : rewriteUrlForContainer(llm.base_url);
+    // OAuth token causes the SDK to authenticate directly with api.anthropic.com,
+    // bypassing ANTHROPIC_BASE_URL entirely. Remove it so the container uses
+    // ANTHROPIC_API_KEY (set below) which LiteLLM can validate as a Bearer token.
+    delete envVars.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+  if (llm?.api_key) {
+    envVars.ANTHROPIC_API_KEY = resolveSecretRef(llm.api_key);
+  }
+
+  return envVars;
 }
 
 export interface ContainerRunOptions {
@@ -264,8 +296,14 @@ export function buildContainerArgs(
   }
 
   // Network mode
+  const networkMode = containerConfig?.networkMode ?? 'bridge';
   if (containerConfig?.networkMode) {
     args.push('--network', containerConfig.networkMode);
+  }
+  // On Linux, host.docker.internal is not injected automatically — add it explicitly.
+  // Not needed (and invalid) in host network mode where localhost is the host directly.
+  if (networkMode !== 'host') {
+    args.push('--add-host=host.docker.internal:host-gateway');
   }
 
   for (const mount of mounts) {
@@ -296,7 +334,7 @@ export async function runContainerAgent(
 
   const mounts = buildVolumeMounts(group, input.isMain);
   const containerArgs = buildContainerArgs(mounts, group.containerConfig, {
-    envVars: resolveContainerEnvVars(group),
+    envVars: resolveContainerEnvVars(group, group.containerConfig?.networkMode),
   });
 
   logger.debug(
@@ -323,9 +361,18 @@ export async function runContainerAgent(
   const logsDir = path.join(GROUPS_DIR, group.folder, 'logs');
   fs.mkdirSync(logsDir, { recursive: true });
 
-  // Sync shared credentials into this group's session before spawning
+  // Sync shared credentials into this group's session before spawning.
+  // Skip when LiteLLM is configured — the OAuth token in credentials causes
+  // Claude Code to authenticate directly with api.anthropic.com, bypassing the proxy.
   const groupSessionsDir = path.join(DATA_DIR, 'sessions', group.folder, '.claude');
-  copyCredentialsToGroup(groupSessionsDir);
+  const llm = group.llmConfig;
+  if (llm?.provider === 'litellm') {
+    // Remove stale credentials so Claude Code doesn't pick up the OAuth token
+    const credsDest = path.join(groupSessionsDir, '.credentials.json');
+    try { fs.unlinkSync(credsDest); } catch { /* not present */ }
+  } else {
+    copyCredentialsToGroup(groupSessionsDir);
+  }
 
   return new Promise((resolve) => {
     // Pass DOCKER_HOST to child process for docker-proxy support

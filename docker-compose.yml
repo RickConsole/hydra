@@ -186,7 +186,7 @@ services:
       - orchestrator
     networks:
       - hydra-internal
-    healthcheck:
+    healthcheck: 
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
@@ -219,3 +219,4 @@ volumes:
     driver: local
   ollama_data:
     driver: local
+

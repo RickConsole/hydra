@@ -21,6 +21,17 @@ bots:
     platform: telegram
 
 # =============================================================================
+# LLM Provider
+# =============================================================================
+# Define the default LLM provider for agents to use. Can be overridden per agent.
+
+llm:
+  provider: litellm
+  base_url: http://localhost:4000
+  api_key: secret:LITELLM_API_KEY
+
+
+# =============================================================================
 # Agents
 # =============================================================================
 # Each agent is an AI assistant with its own persona, tools, and permissions.
@@ -34,11 +45,14 @@ agents:
     chat_id: "123456789"  # Your personal chat ID
 
   # Development assistant
+  # Overrides LiteLLM to Anthropic 
   - name: Merlin (Dev)
     folder: merlin
     trigger: "@Merlin"
     bot: merlin
     chat_id: "-1001234567890"
+    llm:
+      provider: anthropic
     container:
       image: hydra-agent:latest
       network_mode: bridge

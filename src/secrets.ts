@@ -25,6 +25,7 @@ export const BASE_VARS = [
   'QDRANT_URL',
   'OLLAMA_URL',
   'OPENAI_API_KEY',
+  'LITELLM_API_KEY',
 ];
 
 let secretsCache: Record<string, string> | null = null;
@@ -84,6 +85,19 @@ export function loadSecrets(): Record<string, string> {
 /** Clear cached secrets (for reload/testing). */
 export function clearSecretsCache(): void {
   secretsCache = null;
+}
+
+/**
+ * Resolve a `secret:VAR_NAME` reference from secrets.env.
+ * Plain values are returned as-is, so this is safe to call unconditionally.
+ *
+ * Example in hydra.yaml:
+ *   api_key: secret:LITELLM_API_KEY
+ */
+export function resolveSecretRef(value: string): string {
+  if (!value.startsWith('secret:')) return value;
+  const key = value.slice(7);
+  return loadSecrets()[key] ?? value;
 }
 
 /**

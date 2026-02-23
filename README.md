@@ -229,7 +229,7 @@ AWS_SECRET_ACCESS_KEY=...
 CUSTOM_TOKEN=abc123
 ```
 
-A set of base variables (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `MEM0_API_KEY`, `QDRANT_URL`, `OLLAMA_URL`, `OPENAI_API_KEY`) are injected into **every** container if present. Additional secrets are opt-in per agent:
+A set of base variables (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `MEM0_API_KEY`, `QDRANT_URL`, `OLLAMA_URL`, `OPENAI_API_KEY`, `LITELLM_API_KEY`) are injected into **every** container if present. Additional secrets are opt-in per agent:
 
 ```yaml
 agents:
@@ -304,6 +304,7 @@ Container secrets go in `~/.config/hydra/secrets.env`. Host-side config (bot tok
 | `CLAUDE_CODE_OAUTH_TOKEN` | `secrets.env` | OAuth token from Claude Code (auto-managed) |
 | `QDRANT_URL` | `secrets.env` | Qdrant vector DB URL (default: `http://localhost:6333`) |
 | `OLLAMA_URL` | `secrets.env` | Ollama embedding server URL (default: `http://localhost:11434`) |
+| `LITELLM_API_KEY` | `secrets.env` | LiteLLM Proxy API key | 
 
 ## Security Model
 

@@ -49,6 +49,16 @@ const ContainerConfigSchema = z.object({
 });
 
 /**
+ * LLM provider configuration (global or per-agent)
+ */
+const LlmProviderSchema = z.object({
+  provider: z.enum(['anthropic', 'litellm']),
+  base_url: z.string().optional().describe('Base URL for the LLM proxy (e.g., http://localhost:4000)'),
+  api_key: z.string().optional().describe('API key — use secret:VAR_NAME to read from ~/.config/hydra/secrets.env, or env:VAR_NAME for environment variables'),
+});
+export type LlmProviderConfig = z.infer<typeof LlmProviderSchema>;
+
+/**
  * Agent (group) definition
  */
 const AgentSchema = z.object({
@@ -60,6 +70,7 @@ const AgentSchema = z.object({
   model: z.string().optional().describe('Model to use (e.g., "opus", "sonnet")'),
   persona: z.string().optional().describe('Inline persona (alternative to CLAUDE.md file)'),
   container: ContainerConfigSchema.optional(),
+  llm: LlmProviderSchema.optional().describe('Per-agent LLM config (overrides global llm section)'),
 });
 
 /**
@@ -115,6 +126,9 @@ export const HydraConfigSchema = z.object({
   security: z.object({
     mounts: MountSecuritySchema.optional(),
   }).default(() => ({})),
+
+  // LLM provider (global default, overridable per-agent)
+  llm: LlmProviderSchema.optional(),
 
   // Memory
   memory: MemoryConfigSchema.optional(),
@@ -380,6 +394,11 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
     additionalMounts?: Array<{ hostPath: string; containerPath: string; readonly?: boolean }>;
     secrets?: string[];
   };
+  llmConfig?: {
+    provider: 'anthropic' | 'litellm';
+    base_url?: string;
+    api_key?: string;
+  };
 }> {
   const result: Record<string, {
     name: string;
@@ -391,6 +410,11 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
       networkMode?: 'bridge' | 'host' | 'none';
       additionalMounts?: Array<{ hostPath: string; containerPath: string; readonly?: boolean }>;
       secrets?: string[];
+    };
+    llmConfig?: {
+      provider: 'anthropic' | 'litellm';
+      base_url?: string;
+      api_key?: string;
     };
   }> = {};
 
@@ -413,6 +437,16 @@ export function toLegacyRegisteredGroups(config: HydraConfig): Record<string, {
           readonly: m.readonly,
         })),
         secrets: agent.container.secrets,
+      };
+    }
+
+    // Merge global llm config with per-agent override (per-agent wins)
+    const effectiveLlm = agent.llm ?? config.llm;
+    if (effectiveLlm) {
+      result[jid].llmConfig = {
+        provider: effectiveLlm.provider,
+        base_url: effectiveLlm.base_url,
+        api_key: effectiveLlm.api_key,
       };
     }
   }
